@@ -1,0 +1,54 @@
+# pyproject.toml
+[project]
+name = "yuuagent-quantum"
+version = "0.1.0"
+description = "Autonomous Quantum Simulation with LangChain Agents"
+readme = "README.md"
+requires-python = ">=3.10,<3.12"
+authors = [{ name = "Yuunagi", email = "yuunagi.cn@outlook.com" }]
+license = { text = "MIT" }
+
+dependencies = [
+    # LangChain核心
+    "langchain",
+    "langchain-deepseek",
+    # 量子计算相关
+    "physics-tenpy",
+    "numpy",
+    "scipy",
+    "Cython",
+    "setuptools",
+    # 数据处理和可视化
+    "pandas",
+    "matplotlib",
+    "seaborn",
+    # 工具和工具调用
+    "python-dotenv",
+    # 开发和调试
+    "jupyter",
+    "ipython",
+    "rich",
+    "tqdm",
+    # 文件处理和RAG
+    "chromadb>=0.4.0",
+    "sentence-transformers>=2.2.0",
+    "PyPDF2>=3.0.0",
+    "langchain-mcp-adapters>=0.2.1",
+    "langsmith>=0.6.4",
+    "langchain-core>=1.2.7",
+    "tiktoken>=0.12.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.1.0",       # 替代 black, isort, flake8, mypy
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "pre-commit>=3.5.0",
+]
+test = ["pytest-asyncio>=0.21.0", "pytest-xdist>=3.3.0"]
+serve = ["fastapi>=0.104.0", "uvicorn[standard]>=0.24.0", "langserve>=0.0.48"]
+
+[[tool.uv.index]]
+url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+default = true
