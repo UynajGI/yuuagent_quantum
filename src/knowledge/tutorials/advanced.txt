@@ -1,0 +1,1500 @@
+
+
+--- DOC: examples ---
+Examples
+========
+
+Toy codes
+---------
+
+These "toy codes" are meant to give you a flavor of the different algorithms,
+while keeping the codes as readable and simple as possible.
+They can be found in a separate [TeNPyToycodes]_ repository https://github.com/tenpy/tenpy_notebooks in the folder ``tenpy_toycodes/``.
+The only requirements to run them are Python 3, Numpy, and Scipy, (and jupyter for running the notebooks).
+For reference, we include them here as examples.
+
+    :glob:
+
+    toycode_stubs/*
+
+It has the following tutorial notebooks.
+
+    :glob:
+    :maxdepth: 1
+
+    toycodes/*
+
+Python scripts
+--------------
+
+These example scripts illustrate the very basic interface for calling TeNPy.
+They are included in the [TeNPySource]_ repository in the folder ``examples/``,
+we include them here in the documentation for reference.
+You need to install TeNPy to call them (see :doc:`/INSTALL`), but you can copy them anywhere before execution.
+(Some scripts include other files from the same folder, though; copy those as well.)
+
+    :glob:
+
+    examples/*
+
+A bit more elaborate examples from the subfolders in ``examples/*`` are included in this list:
+
+    :glob:
+
+    examples/advanced/*
+    examples/chern_insulators/*
+
+
+YAML config examples
+--------------------
+We also have abunch of example config files that can be used for standard simulations, see :doc:`/intro/simulations`.
+
+    :glob:
+
+    examples/yaml/*
+
+
+Jupyter Notebooks
+-----------------
+
+This is a collection of [jupyter]_ notebooks from the [TeNPyNotebooks]_ repository.
+You need to install TeNPy to execute them (see :doc:`/INSTALL`), but you can copy them anywhere before execution.
+Note that some of them might take a while to run, as they contain more extensive examples.
+
+    :glob:
+    :maxdepth: 1
+
+    notebooks/*
+
+--- DOC: options ---
+Parameters and options
+======================
+
+(We use `parameter` and `option` synonymously. See also the section on parameters in :doc:`/intro/simulations`.
+
+Standard simulations in TeNPy can be defined by just a set of options collected in a dictionary (possibly containing
+other parameter dictionaries).
+It can be convenient to represent these options in a [yaml]_ file, say ``parameters.yml``, which might look like this:
+
+
+Note that the default values and even the allowed/used option names often depend on other parameters.
+For example, the `model_class` parameter above given to a tenpy.simulations.simulation.Simulation selects a model class,
+and different model classes might have completely different parameters.
+This gives you freedom to easily define your own parameters when you implement a model,
+but it also makes it a little bit harder to keep track of allowed values.
+
+In the TeNPy documentation, we use the ``Options`` sections of doc-strings to define parameters that are read out.
+Each documented parameter is attributed to one set of parameters, called "config", and managed in a tenpy.tools.params.Config class at runtime.
+The above example represents the config for a `Simulation`, with the `model_params` representing the config given as
+`options` to the model for initialization.
+Sometimes, there is also a structure of one `config` including the parameters from another one:
+For example, the generic parameters for time evolution algorithms, :cfgTimeEvolutionAlgorithm are included
+into the :cfgTEBDEngine config, similarly to the sub-classing used.
+
+During runtime, the tenpy.tools.params.Config class logs the first use of any parameter (with DEBUG log-level, if
+the default is used, and with INFO log-level, if it is non-default). Moreover, the default is saved into the parameter
+dictionary. Hence, it will contain the *full set of all used parameters*, default and non-default, at the end of a
+simulation, e.g., in the `sim_params` of the `results` returned by tenpy.simulations.Simulation.run.
+
+
+    You can find a **list of all the different configs** in the cfg-config-index, and a **list of all parameters** in cfg-option-index.
+
+
+    If you add extra options to your configuration that TeNPy doesn't read out by the end of the simulation, it will (usually) issue a warning.
+    Getting such a warnings is an indicator for a typo in your configuration, or an option being in the wrong config dictionary.
+
+
+Python snippets in yaml files
+-----------------------------
+When defining the parameters in the yaml file, you might want to evaluate small formulas e.g., set a parameter to a certain fraction of $\pi$,
+or expanding a long list ``[2**i for i in range(5, 10)]`` without explicitly writing all the entries.
+For those cases, it can be convenient to have small python snippets inside the yaml file, which we allow by loading the
+yaml files with tenpy.tools.params.load_yaml_with_py_eval.
+
+It defines a ``!py_eval`` yaml tag, which should be followed by a string of python code to be evaluated with python's ``eval()`` function.
+A good method to pass the python code is to use a literal string in yaml, as shown in the simple examples below.
+
+
+    a: !py_eval |
+        2**np.arange(6, 10)
+    b: !py_eval |
+        [10, 15] + list(range(20, 31, 2)) + [35, 40]
+    c: !py_eval "2*np.pi * 0.3"
+
+--- DOC: measurements ---
+Measurements for Simulations
+============================
+
+Rationale
+---------
+
+When we run a simulation performing a time evolution, we are interested in measurements
+after every (n-th) time step, but it would be too costly (in terms of disk space) to save the
+full psi at each time step; we only have the ``|psi(t)>`` *during* the simulation, not afterwards.
+Hence, we need to define what measurements we want to perform for a given simulation **before**
+running it.
+
+    For variational ground state searches, e.g. DMRG, the situation is better: we're not
+    interested in how we got to the ground state, but only properties of the ground state itself.
+    In this case, we can first run DMRG, save the state, and then perform additional
+    measurements and analysis *after* finishing the simulation, so it is not crucial to
+    define all the measurements before the simulation.
+
+The setup for simulations in TeNPy is as follows.
+
+1) For each measurement that is to be done, we need a measurement function that evaluates
+   whatever we want to measure, e.g., the expectation value or correlation function of some operators.
+   If needed, you can define your own, custom functions.
+2) For a given simulation, we specify the list of measurement functions in the simulation parameter
+   :cfgSimulation.connect_measurements.
+3) When the simulation runs, it calls the tenpy.simulations.Simulation.make_measurements method
+   each time a set of measurements should be performed, e.g. on the initial state, during the time
+   evolution, and on the final state.
+   This causes a call to each of the measurement functions specified in
+   the :cfgSimulation.connect_measurements parameter, passing the current state
+   ``psi, model, simulation`` as arguments (possibly amongst other keyword arguments
+   also specified in :cfgSimulation.connect_measurements).
+   Moreover, it passes a dictionary ``results``, in which measurement results should be saved.
+   At the end of `make_measurements`, the simulation class merges the obtained results
+   into the collection tenpy.simulations.Simulation.results of all previous measurements
+4) At the end of simulation, the `results` are saved and returned for further analysis (e.g. plotting).
+
+
+Measurement functions
+---------------------
+
+In the simplest case, a measurement function is just a function, which can take the keyword arguments
+``results, psi, model, simulation`` and saves the measurement results in the dictionary `results`.
+The other arguments `psi` and `model` are the current MPS and model that can be used for measurements,
+and `simulation` gives access to the full simulation class, in case other additional data is needed.
+
+Within TeNPy, we use the convention that measurement functions (taking these arguments and saving to `results` instead
+of simply returning values) start with an ``m_`` in their name.
+A few generic measurement functions are defined in tenpy.simulations.measurement.
+
+As a first, somewhat trivial example, let us look at the source code of
+tenpy.simulations.measurement.m_entropy::
+
+    def m_entropy(results, psi, model, simulation, results_key='entropy'):
+        results[results_key] = psi.entanglement_entropy()
+
+As you can see, it's a simple wrapper around the MPS method tenpy.networks.mps.MPS.entanglement_entropy.
+Note that usually the `psi` and `model` arguments are the same as the simulation attributes
+``simulation.psi`` and ``simulation.model``, but they can be different in certain cases, e.g. when grouping sites.
+In most cases, you should directly use the passed `psi` and `model`.
+
+Of course, you can also do some actual calculations in the measurement functions.
+A good example of this is the tenpy.simulations.measurement.m_onsite_expectation_value - take a look at it's
+source code. Another example could be the `m_pollmann_turner_inversion` measurement function defined in the
+:doc:`/examples/model_custom` example from the :doc:`/intro/simulations` guide.
+
+
+The connect_measurements parameter
+----------------------------------
+
+The :cfgSimulation.connect_measurements parameter is a list with one entry for each measurement function to be
+used. Each function is specified by a tuple ``module, func_name, extra_kwargs, priority``.
+Here, `module` and `func` specify the module and name of the function, `extra_kwargs` are (optional) additional keyword
+arguments to be given to the function, and `priority` allows to control the order in which the measurement functions get
+called. The latter is useful if you want to "post-process" results of another measurement function.
+
+For example, say you want to measure local expectation values of both `Sz` and `Sx` with
+tenpy.simulations.measurement.m_onsite_expectation_value, then you could use
+
+
+    connect_measurements:
+        - - tenpy.simulations.measurement
+          - m_onsite_expectation_value
+          - opname: Sx
+        - - tenpy.simulations.measurement
+          - m_onsite_expectation_value
+          - opname: Sz
+
+These measurement functions have default `results_key` under which they save values in the `results`, so you can then
+read out ``results['<Sx>']`` and ``results['<Sz>']`` in the simulation results.
+If you want other keys, you can explicitly specify them with the `results_key` argument of the function, e.g.,
+
+
+    connect_measurements:
+        - - tenpy.simulations.measurement
+          - m_onsite_expectation_value
+          - opname: Sx
+            results_key: X_i     # save as results['X_i']
+        - - tenpy.simulations.measurement
+          - m_onsite_expectation_value
+          - opname: Sz
+            results_key: Z_i     # save as results['Z_i']
+
+
+Some measurements are actually that common that they get added by default to the simulations (unless you explicitly
+disable them with :cfgSimulation.use_default_measurements); for example the tenpy.simulations.measurement.m_entropy
+is measured for any simulation, as it appears in tenpy.simulations.simulation.Simulation.default_measurements.
+
+Often, what you want to measure is just calling a method of the state `psi`, so there is a special syntax in the
+`connect_measurements` parameter:
+if you **specify the first entry to be** ``psi_method``, ``model_method`` or ``simulation_method``, you can call a method of the
+corresponding classes.
+As for global measurement functions, we pass the corresponding ``results, psi, model, simulation`` keyword arguments,
+e.g. `psi_method` measurement functions need to accept ``results, model, simulation`` as arguments, and
+`simulation_method` measurement functions should accept ``results, psi, model``.
+
+This is already very useful to call measurement functions defined inside (custom) models or simulation classes,
+yet methods of `psi` don't follow the measurement function call structure, but simply return values.
+For those cases, you can use another special syntax, namely to **simply add `wrap` before the function name**.
+In this case, we don't pass ``results, psi, model, simulation``, but simply save the return values of the function
+in the results, under the `results_key` that gets passed as extra keyword argument,
+see (the source code of) tenpy.simulations.measurement.measurement_wrapper.
+The `results_key` defaults to the function name.
+
+To make this clearer, let's extend the example above with more measurements:
+
+
+    connect_measurements:
+        - - tenpy.simulations.measurement
+          - m_onsite_expectation_value
+          - opname: Sx
+        - - tenpy.simulations.measurement
+          - m_onsite_expectation_value
+          - opname: Sz
+        - - psi_method
+          - wrap correlation_function   # call psi.correlation_function()
+          - results_key: '<Sz Sz>'      # save returned value as results["<Sz Sz>"]
+            ops1: Sz                    # other (necessary) arguments to psi.correlation_function
+            ops2: Sz
+        - - simulation_method
+          - wrap walltime               # "measure" wall clock time it took to run so far
+        - - tenpy.tools.process
+          - wrap memory_usage           # "measure" the current RAM usage in MB
+
+
+
+   The `*_method` and `wrap` syntax are (currently) special to the :cfgSimulation.connect_measurements
+   parameter, and do not apply to e.g. :cfgSimulation.connect_algorithm_checkpoint, which uses an analogous
+   setup to allow calling functions at each algorithm checkpoint.
+
+--- DOC: simulations ---
+Simulations
+===========
+
+What is a simulation?
+---------------------
+
+Simulations provide the highest-level interface in TeNPy.
+They represent one simulation from start (initializing the various classes from given parameters) to end (saving the results to a file).
+The idea is that they contain the full package of code that you run by a job on a computing cluster.
+(You don't have to stick to that rule, of course.)
+In fact, any simulation can be run from the command line, given only a parameter file as input, like this::
+
+   python -m tenpy parameters.yml
+   # or alternatively, if tenpy is installed correctly:
+   tenpy-run parameters.yml
+
+   # equivalent to calling `tenpy.console_main("parameters.yml")` from within python
+
+You need to specify somewhere what type of simulation you want to run. Often, one of the predefined ones like
+the tenpy.simulations.ground_state_search.GroundStateSearch for running DMRG or
+tenpy.simulations.time_evolution.RealTimeEvolution for running e.g. TEBD or TDVP will suffice.
+The tenpy.simulations.simulation.Simulation class can be specified with the `simulation_class` option in the yaml file, or directly as a command line
+argument, e.g. ``tenpy-run -C GroundStateSearch parameters.yml``.
+Note that command line arguments possibly override entries in the yaml files.
+For more details, see tenpy.console_main for the command-line interface.
+
+Of course, you can also directly run the simulation from inside python, the command line call is essentially just a wrapper around the tenpy.run_simulation python interface::
+
+    import tenpy
+
+    simulation_params = tenpy.load_yaml_with_py_eval("parameters.yml")
+    # instead of using yaml, you can also define a usual python dictionary
+    tenpy.run_simulation(**simulation_params)
+
+Or as a single line::
+
+    tenpy.console_main("parameters.yml")
+
+To have self-contained jupyter notebook examples, the following pattern might be useful::
+
+    simulation_params = tenpy.load_yaml_with_py_eval(yaml_content="""
+    SimulationClass: GroundStateSearch
+    ...
+    """)
+    tenpy.run_simulation(**simulation_params)
+
+
+An minimal example to run finite DMRG for a Spin-1/2 Heisenberg tenpy.models.spins.SpinChain could be given by
+
+
+
+Parallelization: controlling the number of threads
+--------------------------------------------------
+Almost all of the TeNPy code is "only" using thread-based parallelization provided by the underlying LAPACK/BLAS package linked to by Numpy/Scipy, and/or TeNPy's Cython code when you compile it.
+(A notable exception is the tenpy.tools.cache.ThreadedStorage for caching.)
+In practice, you can control the number of threads in the same way as if you use just plain numpy - by default, this uses all the CPU cores on a given machine.
+
+If you run things on a cluster, it is often required to only use a fixed number of cores. Assuming a standard Linux cluster, the easiest way to control the used number of threads is usually the OMP_NUM_THREADS environment variable, which you can set in your cluster submission script:
+
+
+    export OMP_NUM_THREADS=4
+    python -m tenpy parameters.yml
+
+If you linked against MKL, you can use ``export MKL_NUM_THREADS=4`` instead. In some cases, it might also be necessary to additionally ``export MKL_DYNAMIC=FALSE``.
+Universities usually have some kind of local cluster documentation with examples - try to follow those, and double check
+that you only use the cores you request.
+
+
+Customizing parameters
+----------------------
+
+The most straight-forward way to customize a simulation is to tweak and adjust the parameters to your needs.
+As you can see in the above example, the parameters are organized in a hierarchical structure, following roughly the
+same level structure as discussed in the :doc:`/intro/overview`.
+
+The allowed options on the top level are documented in the corresponding simulation class, e.g. the
+tenpy.simulations.ground_state_search.GroundStateSearch.
+
+The allowed entries in the `model_params` section depend on the `model_class`:
+Clearly, the tenpy.models.spins.SpinChain in the example above requires a different set of specified
+coupling parameters than, e.g., the tenpy.models.hubbard.FermiHubbardModel.
+The base model classes like the tenpy.models.models.model.CouplingMPOModel have a common set of parameters
+usually read out, but custom model implementations can override this and/or add additional parameters.
+The list of allowed parameters can hence be found in the documentation of the most specialized class that you use, e.g.,
+the tenpy.models.tf_ising.TFIChain above.
+
+Similarly, allowed values in the `algorithm_params` section depend on the used `algorithm_class`.
+
+
+To get the full set of used options, it can be convenient to simply run the algorithm
+(for debugging parameters to allow a very quick run) and look at the ``results['simulation_parameters']``
+returned by the simulation (or saved to file):
+
+
+    import tenpy
+    from pprint import pprint
+    import yaml
+
+    with open('parameters.yml', 'r') as stream:
+        simulation_parameters = tenpy.load_yaml_with_py_eval(stream)
+    # alternative: simulation_parameters = tenpy.load_yaml_with_py_eval('parameters.yml')
+    results = tenpy.run_simulation(simulation_parameters)
+    pprint(results['simulation_parameters'])
+
+
+    You can find a **list of all the different configs** in the cfg-config-index, and a **list of all parameters** in cfg-option-index.
+
+
+    If you add extra options to your configuration that TeNPy doesn't read out by the end of the simulation, it will (usually) issue a warning.
+    Getting such a warnings is often an indicator for a typo in your configuration, or an option being in the wrong section.
+
+
+Adjusting the output
+--------------------
+If specified, output files are saved in a given :cfgSimulation.directory.
+As shown in the parameter example above, you can simply give an :cfgSimulation.output_filename parameter.
+Alternatively, one can specify the :cfgSimulation.output_filename_params to make the filename depend on other
+simulation parameters (specified as keys of the `parts`), e.g:
+
+
+    directory: results
+    output_filename_params:
+        prefix: dmrg
+        parts:
+            algorithm_params.trunc_params.chi_max: 'chi_{0:04d}'
+            model_params.L: 'L_{0:d}'
+        suffix: .h5
+
+With the above example parameters, this would yield the output filename ``results/dmrg_chi_0100_L_16.h5``; further examples in the
+documentation of tenpy.simulations.simulation.output_filename_from_dict.
+
+Note that TeNPy will not overwrite output unless you explicitly set :cfgSimulation.overwrite_output to ``True``.
+Rather, it will modify the filename with extra numbers, e.g., ``file.h5, file_1.h5, file_2.h5, ...``, or it will raise a
+specific tenpy.simulations.simulation.Skip exception if :cfgSimulation.skip_if_output_exists is set.
+Further, temporary ``.backup.h5`` files are used while saving to avoid loosing previous results in case of a crash during the save.
+
+The option :cfgSimulation.save_psi allows to enable (default) or disable saving the full tensor network at the end of the simulation - note this drastically influences the size of the output file!
+For long-running simulations you can decide to save intermediate checkpoints with the option :cfgSimulation.save_every_x_seconds; see the resume_details_ section below.
+
+Log files by default use the same filename as the output but with the extension ``.log``, see :doc:`/intro/logging` for more details.
+In practice, it is useful only print warnings and errors to stdout to allow a simple check for errors, while the ``.log`` files can then be used to follow the details and progress of the simulation:
+
+
+    log_params:
+        to_file: INFO
+        to_stdout: WARN
+        # format: "{levelname:.4s} {asctime} {message}"
+
+
+    Always check errors and warnings! In most simulations, there shouldn't be any warnings left.
+
+
+Analyzing the results post simulation: output structure
+-------------------------------------------------------
+A simulation usually generates an output file that can be loaded with the tenpy.tools.hdf5_io.load function.
+It is usually either in the pickle or HDF5 format, see :doc:`/intro/input_output` for more details.
+
+The ability to keep code snippets and plots together in [jupyter]_ notebooks makes them a very convenient environment for analyzing results.
+There are a bunch of jupyter notebooks in the :doc:`/examples` that you can look at for inspiration.
+
+The `results` returned by tenpy.run_simulation are a (nested) dictionary.
+The general structure is listed in tenpy.simulations.simulation.Simulation.results.
+Possible entries depend on the simulation class run, and some options like `save_psi` or specified measurements.
+
+Let us consider our initial DMRG example.
+The tenpy.simulations.ground_state_search.GroundStateSearch performs two measurements: one on the initial
+state (unless disabled with :cfgmeasure_initial and one on the final state.
+Further, MPS-based simulations by default measure the entanglement entropies for cutting at the various MPS bonds,
+such that we can read out the final half-chain entanglement entropy like this::
+
+    >>> import tenpy
+    >>> results = tenpy.tools.hdf5_io.load('results/dmrg_chi_0100_L_32.h5')
+    >>> L = results['simulation_parameters']['model_params']['L']
+    >>> L
+    32
+    >>> print(results['measurements']['entropy'].shape)
+    (2, 31)
+    >>> print(results['measurements']['entropy'][-1, (L-1)//2])
+
+Here, the shape of the entropy array is ``(2, 31)`` since 2 is the number of measurements
+(one on the initial state, one on the final ground state), and 31=L-1 the number of bonds.
+Note that you can easily read out the simulation parameters, even default ones that are only implicitly defined
+somewhere in the code!
+
+
+Adding more measurements
+------------------------
+Most simulation classes have only a few tenpy.simulations.Simulation.default_measurements, but you can easily
+add more with the :cfgSimulation.connect_measurements parameters. Each measurement is simply a function that is
+called whenever the simulation wants to measure, e.g. with the initial state, at the end of the simulation, and for time
+evolutions also during the evolution. The default measurement functions are defined in
+the module tenpy.simulations.measurement; tenpy.simulations.measurement.m_measurement_index documents what
+arguments a measurement function should have.
+In the simplest case, you just specify the module and function name, but you can also add more arguments, as the
+following example shows.
+
+
+    connect_measurements:
+      - - tenpy.simulations.measurement
+        - m_onsite_expectation_value
+        - opname: Sz
+      - - psi_method
+        - wrap correlation_function
+        - results_key: '<Sp_i Sm_j>'
+          ops1: Sp
+          ops2: Sm
+
+Note the indentation and minus signs here: this yaml syntax is equivalent to the following python structure:
+
+
+    {'connect_measurements': [['tenpy.simulations.measurement',
+                               'm_onsite_expectation_value',
+                               {'opname': 'Sz'}],
+                              ['psi_method',
+                               'wrap correlation_function',
+                               {'results_key': '<Sp_i Sm_j>',
+                                'ops1': 'Sp',
+                                'ops2': 'Sm'}]]}
+
+The measurement functions add the values under the specified `key` to the `results` returned and saved by the
+simulation, e.g. for the above measurements you can now read out ``results['measurements']['<Sz>']`` (default key) and ``results['measurements']['<Sp_i Sm_j>']``.
+
+
+    For more details, see the extra guide :doc:`/intro/measurements`.
+
+
+A full example with custom python code
+--------------------------------------
+
+While there are plenty of predefined models and algorithms, there is a good chance that you need to tweak and adjust
+them further by writing your own python code. Examples could be custom models and/or lattices, measurement functions, or
+even adjustments to any other class (tensor networks, algorithms, simulations...).
+
+As a concrete example, let's try to reproduce some results of pollmann2012, namely the :math:`\mathcal{O}_I` defined in eq. (15) of that paper.
+A new model class is not strictly necessary, one can also select appropriate parameters for the tenpy.models.spins.SpinChain, but we include it here for completeness.
+Details on how to define a custom model class can be found in :doc:`/intro/model`.
+
+
+The corresponding `simulation_custom.yml` parameter file, collecting the snippets above, could then look like this:
+
+
+Note that we explicitly specified the module `model_custom` for the additional measurement; you need to adjust that if
+you rename the `model_custom.py` file.
+You can then run this simulation, say for three different `D` values specified directly on the command line::
+
+    tenpy-run -i model_custom simulation_custom.yml -o model_params.D 0.
+    tenpy-run -i model_custom simulation_custom.yml -o model_params.D 1.5
+    tenpy-run -i model_custom simulation_custom.yml -o model_params.D -1.0
+
+
+
+    If you use the setup from the [TeNPyProjectTemplate]_ repository, the ``cluster_jobs.py`` helps to manage submitting
+    jobs with similar parameters to a computing cluster;
+    it includes this very example as a starting point for customization.
+
+
+
+Checkpoints for resuming a simulation
+-------------------------------------
+As mentioned above, you can save intermediate results with the option :cfgsave_every_x_seconds.
+Moreover, you need to have :cfgSimulation.save_psi and :cfgSimulation.save_resume_data enabled::
+
+    save_every_x_seconds: 1800
+    save_psi: True
+    save_resume_data: True
+
+If this is the case, the simulation will save the current status at certain "checkpoints" defined by the algorithm,
+e.g., in DMRG at the end of a sweep.
+The checkpoints are saved to the same filename as the desired final output file, and get overwritten by each following save at a checkpoint.
+You can check ``results['finished']`` in the output file to see whether it finished.
+
+You can then resume the simulation using the function tenpy.resume_from_checkpoint.
+
+Note that you can also adjust parameters for the resume.
+For example, if you find that a DMRG result (even a finished one) is not yet fully converged in bond dimension, you can "resume" the simulation
+with a larger bond dimension and a new output filename.
+For DMRG, this is roughly equivalent to starting a new simulation with the initial state loaded
+tenpy.networks.mps.InitialStateBuilder.from_file; but it can reuse more than just the state, e.g., environments and already performed measurements, or the `evolved_time` of a time evolution.
+
+
+Sequential simulations
+----------------------
+Instead of waiting for one simulation to finish and "resuming" another one with slightly different parameters, you can
+also directly specify a set of "sequential" simulations where the output/results of one simulation are reused for the
+next one. This can be particularly useful to "adiabatically" follow the ground state when tuning model parameters, in
+particular for flux pump experiments, or to get a stable scaling with bond dimension.
+
+To achieve this, you need to call tenpy.run_seq_simulations instead of just tenpy.run_simulation, and
+specify the :cfgsequential parameters for the simulation (at the top level of the yaml files), in particular
+the `recursive_keys` for the parameters to be changed. The values for those parameters can be specified as
+:cfgsequential.value_lists, or as lists in the original location of the yaml file.
+
+
+    sequential:
+        recursive_keys:
+            - algorithm_params.trunc_params.chi_max
+
+    algorithm_params:
+        trunc_params:
+            chi_max: [128, 256, 512]
+
+--- DOC: JordanWigner ---
+Fermions and the Jordan-Wigner transformation
+=============================================
+
+The `Jordan-Wigner transformation <https://en.wikipedia.org/wiki/Jordan-Wigner_transformation>`_
+maps fermionic creation- and annihilation operators to (bosonic) spin-operators.
+
+
+Spinless fermions in 1D
+-----------------------
+Let's start by explicitly writing down the transformation.
+With the Pauli matrices :math:`\sigma^{x,y,z}_j` and :math:`\sigma^{\pm}_j = (\sigma^x_j \pm \mathrm{i} \sigma^y_j)/2` on each site,
+we can map
+
+    n_j         &\leftrightarrow (\sigma^{z}_j + 1)/2        \\
+    c_j         &\leftrightarrow (-1)^{\sum_{l < j} n_l} \sigma^{-}_j             \\
+    c_j^\dagger &\leftrightarrow (-1)^{\sum_{l < j} n_l} \sigma^{+}_j
+
+The n_l in the second and third row are defined in terms of Pauli matrices according to the first row.
+We do not interpret the Pauli matrices as spin-1/2; they have nothing to do with the spin in the spin-full case.
+If you really want to interpret them physically, you might better think of them as hard-core bosons
+(:math:`b_j =\sigma^{-}_j, b^\dagger_j=\sigma^{+}_j`),
+with a spin of the fermions mapping to a spin of the hard-core bosons.
+
+Note that this transformation maps the fermionic operators c_j and :math:`c^\dagger_j` to *global* operators; although they carry an index `j` indicating
+a site, they actually act on all sites ``l <= j``!
+Thus, clearly the operators ``C`` and ``Cd`` defined in the tenpy.networks.site.FermionSite do *not* directly correspond to c_j and
+:math:`c^\dagger_j`.
+The part :math:`(-1)^{\sum_{l < j} n_l}` is called Jordan-Wigner string and in the tenpy.networks.site.FermionSite is given by the local operator
+:math:`JW := (-1)^{n_l}` acting on all sites ``l < j``.
+Since this important, let me stress it again:
+
+    The fermionic operator c_j (and similar :math:`c^\dagger_j`) maps to a *global* operator consisting of
+    the Jordan-Wigner string built by the local operator ``JW`` on sites ``l < j`` *and* the local operator ``C`` (or ``Cd``, respectively) on site ``j``.
+
+On the sites itself, the onsite operators ``C`` and ``Cd`` in the tenpy.networks.site.FermionSite fulfill the correct anti-commutation relation, without the need to include ``JW`` strings.
+The ``JW`` string is necessary to ensure the anti-commutation for operators acting on different sites.
+
+Written in terms of `onsite` operators defined in the tenpy.networks.site.FermionSite,
+with the `i`-th entry in the list acting on site `i`, the relations are thus::
+
+    ["JW", ..., "JW", "C",  "Id", ..., "Id"]   # for the annihilation operator
+    ["JW", ..., "JW", "Cd", "Id", ..., "Id"]   # for the creation operator
+
+Note that ``"JW"`` squares to the identity, ``"JW JW" == "Id"``,
+which is the reason that the Jordan-wigner string completely cancels in :math:`n_j = c^\dagger_j c_j`.
+In the above notation, this can be written as::
+
+    ["JW", ..., "JW", "Cd",  "Id", ..., "Id"] * ["JW", ..., "JW", "C", "Id", ..., "Id"]
+    == ["JW JW", ..., "JW JW", "Cd C",  "Id Id", ..., "Id Id"]      # by definition of the tensorproduct
+    == ["Id",    ..., "Id",    "N",     "Id",    ..., "Id"]         # by definition of the local operators
+    # ("X Y" stands for the local operators X and Y applied on the same site. We assume that the "Cd" and "C" on the first line act on the same site.)
+
+For a pair of operators acting on different sites, ``JW`` strings have to be included for every site between the operators.
+For example, taking ``i < j``,
+:math:`c^\dagger_i c_j \leftrightarrow \sigma_i^{+} (-1)^{\sum_{i <=l < j} n_l}  \sigma_j^{-}`.
+More explicitly, for ``j = i+2`` we get::
+
+    ["JW", ..., "JW", "Cd", "Id", "Id", "Id", ..., "Id"] * ["JW", ..., "JW", "JW", "JW", "C", "Id", ..., "Id"]
+    == ["JW JW", ..., "JW JW", "Cd JW",  "Id JW", "Id C", ..., "Id"]
+    == ["Id",    ..., "Id",    "Cd JW",  "JW",    "C",    ..., "Id"]
+
+In other words, the Jordan-Wigner string appears only in the range ``i <= l < j``, i.e. between the two sites *and* on the smaller/left one of them.
+(You can easily generalize this rule to cases with more than two c or :math:`c^\dagger`.)
+
+This last line (as well as the last line of the previous example) can be rewritten by changing the order of the operators ``Cd JW`` to ``"JW Cd" == - "Cd"``.
+(This is valid because either site ``i`` is occupied, yielding a minus sign from the ``JW``, or it is empty, yielding a 0 from the ``Cd``.)
+
+This is also the case for ``j < i``, say ``j = i-2``:
+:math:`c^\dagger_i c_j \leftrightarrow (-1)^{\sum_{j <=l < i} n_l} \sigma_i^{+} \sigma_j^{-}`.
+As shown in the following, the ``JW`` again appears on the left site,
+but this time acting *after* ``C``::
+
+    ["JW", ..., "JW", "JW", "JW", "Cd", "Id", ..., "Id"] * ["JW", ..., "JW", "C", "Id", "Id", "Id", ..., "Id"]
+    == ["JW JW", ..., "JW JW", "JW C",  "JW", "Cd Id", ..., "Id"]
+    == ["Id",    ..., "Id",    "JW C",  "JW", "Cd",    ..., "Id"]
+
+
+
+
+Higher dimensions
+-----------------
+For an MPO or MPS, you always have to define an ordering of all your sites. This ordering effectively maps the
+higher-dimensional lattice to a 1D chain, usually at the expense of long-range hopping/interactions.
+With this mapping, the Jordan-Wigner transformation generalizes to higher dimensions in a straight-forward way.
+
+
+Spinful fermions
+-----------------
+
+
+As illustrated in the above picture, you can think of spin-1/2 fermions on a chain as spinless fermions living on a ladder (and analogous mappings for higher dimensional lattices).
+Each rung (a blue box in the picture) forms a tenpy.networks.site.SpinHalfFermionSite
+which is composed of two tenpy.networks.site.FermionSite (the circles in the picture) for spin-up and spin-down.
+The mapping of the spin-1/2 fermions onto the ladder induces an ordering of the spins, as the final result must again be a one-dimensional chain, now containing both spin species.
+The solid line indicates the convention for the ordering, the dashed lines indicate spin-preserving hopping :math:`c^\dagger_{s,i} c_{s,i+1} + h.c.`
+and visualize the ladder structure.
+More generally, each species of fermions appearing in your model gets a separate label, and its Jordan-Wigner string
+includes the signs :math:`(-1)^{n_l}` of *all* species of fermions to the 'left' of it (in the sense of the ordering indicated by the solid line in the picture).
+
+In the case of spin-1/2 fermions labeled by :math:`\uparrow` and :math:`\downarrow` on each `site`, the complete mapping is given (where `j` and `l` are indices of the tenpy.networks.site.FermionSite):
+
+    n_{\uparrow,j} &\leftrightarrow (\sigma^{z}_{\uparrow,j} + 1)/2                                                                                  \\
+    n_{\downarrow,j} &\leftrightarrow (\sigma^{z}_{\downarrow,j} + 1)/2                                                                              \\
+    c_{\uparrow,j} &\leftrightarrow (-1)^{\sum_{l < j} n_{\uparrow,l} + n_{\downarrow,l}} \sigma^{-}_{\uparrow,j}                                    \\
+    c^\dagger_{\uparrow,j} &\leftrightarrow (-1)^{\sum_{l < j} n_{\uparrow,l} + n_{\downarrow,l}} \sigma^{+}_{\uparrow,j}                           \\
+    c_{\downarrow,j} &\leftrightarrow (-1)^{\sum_{l < j} n_{\uparrow,l} + n_{\downarrow,l}} (-1)^{n_{\uparrow,j}} \sigma^{-}_{\downarrow,j}          \\
+    c^\dagger_{\downarrow,j} &\leftrightarrow (-1)^{\sum_{l < j} n_{\uparrow,l} + n_{\downarrow,l}} (-1)^{n_{\uparrow,j}} \sigma^{+}_{\downarrow,j} \\
+
+In each of the above mappings the operators on the right hand sides commute; we can rewrite
+:math:`(-1)^{\sum_{l < j} n_{\uparrow,l} + n_{\downarrow,l}} = \prod_{l < j} (-1)^{n_{\uparrow,l}} (-1)^{n_{\downarrow,l}}`,
+which resembles the actual structure in the code more closely.
+The parts of the operator acting in the same box of the picture, i.e. which have the same index `j` or `l`,
+are the 'onsite' operators in the tenpy.networks.site.SpinHalfFermionSite:
+for example ``JW`` on site `j` is given by :math:`(-1)^{n_{\uparrow,j}} (-1)^{n_{\downarrow,j}}`,
+``Cu`` is just the :math:`\sigma^{-}_{\uparrow,j}`, ``Cdu`` is :math:`\sigma^{+}_{\uparrow,j}`,
+``Cd`` is :math:`(-1)^{n_{\uparrow,j}} \sigma^{-}_{\downarrow,j}`.
+and ``Cdd`` is :math:`(-1)^{n_{\uparrow,j}} \sigma^{+}_{\downarrow,j}`.
+Note the asymmetry regarding the spin in the definition of the onsite operators:
+the spin-down operators include Jordan-Wigner signs for the spin-up fermions on the same site.
+This asymmetry stems from the ordering convention introduced by the solid line in the picture, according to which the spin-up site
+is "left" of the spin-down site. With the above definition, the operators within the same tenpy.networks.site.SpinHalfFermionSite fulfill the expected commutation relations,
+for example ``"Cu Cdd" == - "Cdd Cu"``, but again the ``JW`` on sites left of the operator pair is crucial to get the correct
+commutation relations globally.
+
+    Again, the fermionic operators :math:`c_{\uparrow,j}, c^\dagger_{\uparrow,j}, c_{\downarrow,j}, c^\dagger_{\downarrow,j}` correspond to  *global* operators consisting of
+    the Jordan-Wigner string built by the local operator ``JW`` on sites ``l < j`` *and* the local operators ``'Cu', 'Cdu', 'Cd', 'Cdd'`` on site ``j``.
+
+Written explicitly in terms of onsite operators defined in the tenpy.networks.sites.FermionSite,
+with the `j`-th entry entry in the list acting on site `j`, the relations are::
+
+    ["JW", ..., "JW", "Cu",  "Id", ..., "Id"]    # for the annihilation operator spin-up
+    ["JW", ..., "JW", "Cd",  "Id", ..., "Id"]    # for the annihilation operator spin-down
+    ["JW", ..., "JW", "Cdu",  "Id", ..., "Id"]   # for the creation operator spin-up
+    ["JW", ..., "JW", "Cdd",  "Id", ..., "Id"]   # for the creation operator spin-down
+
+As you can see, the asymmetry regarding the spins in the definition of the local onsite operators ``"Cu", "Cd", "Cdu", "Cdd"`` lead to a symmetric definition in the global sense.
+If you look at the definitions very closely, you can see that in terms like ``["Id", "Cd JW", "JW", "Cd"]`` the
+Jordan-Wigner sign :math:`(-1)^{n_\uparrow,2}` appears twice (namely once in the definition of ``"Cd"`` and once in the ``"JW"`` on site
+2) and could in principle be canceled, however in favor of a simplified handling in the code we do not recommend you to cancel it.
+Similar, within a spinless tenpy.networks.site.FermionSite, one can simplify ``"Cd JW" == "Cd"`` and ``"JW C" == "C"``,
+but these relations do *not* hold in the tenpy.networks.site.SpinHalfFermionSite,
+and for consistency we recommend to explicitly keep the ``"JW"`` operator string even in nearest-neighbor models where it is not strictly necessary.
+
+
+How to handle Jordan-Wigner strings in practice
+-----------------------------------------------
+
+There are only a few pitfalls where you have to keep the mapping in mind:
+When **building a model**, you map the physical fermionic operators to the usual spin/bosonic operators.
+The algorithms don't care about the mapping, they just use the given Hamiltonian, be it given as MPO for DMRG or as nearest neighbor couplings for TEBD.
+Only when you do a **measurement** (e.g. by calculating an expectation value or a correlation function), you have to reverse this mapping.
+Be aware that in certain cases, e.g. when calculating the entanglement entropy on a certain bond,
+you cannot reverse this mapping (in a straightforward way), and thus your results might depend on how you defined the Jordan-Wigner string.
+
+Whatever you do, you should first think about if (and how much of) the Jordan-Wigner string cancels.
+For example for many of the onsite operators (like the particle number operator ``N`` or the spin operators in the tenpy.networks.site.SpinHalfFermionSite)
+the Jordan-Wigner string cancels completely and you can just ignore it both in onsite-terms and couplings.
+In case of two operators acting on different sites, you typically have a Jordan-Wigner string inbetween (e.g. for the
+:math:`c^\dagger_i c_j` examples described above and below) or no Jordan-Wigner strings at all (e.g. for density-density
+interactions :math:`n_i n_j`).
+In fact, the case that the Jordan Wigner string on the left of the first non-trivial operator does not cancel is currently not supported
+for models and expectation values, as it usually doesn't appear in practice.
+For terms involving more operators, things tend to get more complicated, e.g. :math:`c^\dagger_i c^\dagger_j c_k c_l` with
+:math:`i < j < k < l` requires a Jordan-Wigner string on sites `m` with :math:`i \leq m <j` or :math:`k \leq m <l`, but
+not for :math:`j < m < k`.
+
+    TeNPy keeps track of which onsite operators need a Jordan-Wigner string in the tenpy.networks.site.Site class,
+    specifically in tenpy.networks.site.Site.need_JW_string and tenpy.networks.site.Site.op_needs_JW.
+    Hence, when you define custom sites or add extra operators to the sites, make sure that
+    tenpy.networks.site.Site.op_needs_JW returns the expected results.
+
+When **building a model** the Jordan-Wigner strings need to be taken into account.
+If you just specify the `H_MPO` or `H_bond`, it is *your* responsibility to use the correct mapping.
+However, if you use the tenpy.models.model.CouplingModel.add_coupling method of the
+tenpy.models.model.CouplingModel ,
+(or the generalization tenpy.models.model.CouplingModel.add_multi_coupling for more than 2 operators),
+TeNPy can use the information from the `Site` class to *automatically add Jordan-Wigner* strings as needed.
+Indeed, with the default argument ``op_string=None``, `add_coupling` will automatically check whether the operators
+need Jordan-Wigner strings and correspondingly set ``op_string='JW', str_on_first=True``, if necessary.
+For `add_multi_coupling`, you can't even explicitly specify the correct Jordan-Wigner strings, but you **must use**
+``op_string=None``, from which it will automatically determine where Jordan-Wigner strings are needed.
+
+Obviously, you should be careful about the convention which of the operators is applied first (in a physical
+sense as an operator acting on a state), as this corresponds to a sign of the prefactor.
+Read the doc-strings of tenpy.models.model.CouplingModel.add_coupling
+tenpy.models.model.CouplingModel.add_multi_coupling for details.
+
+As a concrete example, let us specify a hopping
+:math:`\sum_{i} (c^\dagger_i c_{i+1} + h.c.) = \sum_{i} (c^\dagger_i c_{i+1} + c^\dagger_{i} c_{i-1})`
+in a 1D chain of tenpy.networks.site.FermionSite with tenpy.models.model.CouplingModel.add_coupling.
+The recommended way is just::
+
+    self.add_coupling(strength, 0, 'Cd', 0, 'C', 1, plus_hc=True)
+
+If you want to specify both the Jordan-Wigner string and the ``h.c.`` term explicitly, you can use::
+
+    self.add_coupling(strength, 0, 'Cd', 0, 'C', 1, op_string='JW', str_on_first=True)
+    self.add_coupling(strength, 0, 'Cd', 0, 'C', -1, op_string='JW', str_on_first=True)
+
+Slightly more complicated, to specify the hopping
+:math:`\sum_{\langle i, j\rangle, s} (c^\dagger_{s,i} c_{s,j} + h.c.)`
+in the Fermi-Hubbard model on a 2D square lattice, we could use::
+
+    for (dx, dy) in [(1, 0), (0, 1)]:
+        self.add_coupling(strength, 0, 'Cdu', 0, 'Cu', (dx, dy), plus_hc=True)  # spin up
+        self.add_coupling(strength, 0, 'Cdd', 0, 'Cd', (dx, dy), plus_hc=True)  # spin down
+
+    # or without `plus_hc`
+    for (dx, dy) in [(1, 0), (-1, 0), (0, 1), (0, -1)]:  # include -dx !
+        self.add_coupling(strength, 0, 'Cdu', 0, 'Cu', (dx, dy))  # spin up
+        self.add_coupling(strength, 0, 'Cdd', 0, 'Cd', (dx, dy))  # spin down
+
+    # or specifying the 'JW' string explicitly
+    for (dx, dy) in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
+        self.add_coupling(strength, 0, 'Cdu', 0, 'Cu', (dx, dy), 'JW', True)  # spin up
+        self.add_coupling(strength, 0, 'Cdd', 0, 'Cd', (dx, dy), 'JW', True)  # spin down
+
+
+The most important functions for doing **measurements** are probably tenpy.networks.mps.MPS.expectation_value
+and tenpy.networks.mps.MPS.correlation_function. Again, if all the Jordan-Wigner strings cancel, you don't have
+to worry about them at all, e.g. for many onsite operators or correlation functions involving only number operators.
+If you build multi-site operators to be measured by `expectation_value`, take care to include the Jordan-Wigner
+string correctly.
+
+Some MPS methods like
+tenpy.networks.mps.MPS.correlation_function,
+tenpy.networks.mps.MPS.expectation_value_term and
+tenpy.networks.mps.MPS.expectation_value_terms_sum automatically add Jordan-Wigner strings
+(at least with default arguments).
+Other more low-level functions like tenpy.networks.mps.MPS.expectation_value_multi_sites don't do it.
+Hence, you should always watch out during measurements, if the function used needs special treatment for Jordan-Wigner strings.
+
+--- DOC: npc ---
+Charge conservation with np_conserved
+=====================================
+
+The basic idea is quickly summarized:
+By inspecting the Hamiltonian, you can identify symmetries, which correspond to conserved quantities, called **charges**.
+These charges divide the tensors into different sectors. This can be used to infer for example a block-diagonal structure
+of certain matrices, which in turn speeds up SVD or diagonalization a lot.
+Even for more general (non-square-matrix) tensors, charge conservation imposes restrictions which blocks of a tensor can
+be non-zero. Only those blocks need to be saved, which ultimately (= for large enough arrays) leads to a speedup of many routines, e.g., tensordot.
+
+This introduction covers our implementation of charges; explaining mathematical details of the underlying symmetry is beyond its scope.
+We refer you to the corresponding chapter in our [TeNPyNotes]_ for a more general introduction of the idea (also stating
+the "charge rule" introduced below).
+singh2010 explains why it works form a mathematical point of view, singh2011 has the focus on a :math:`U(1)` symmetry and might be easier to read.
+
+
+What you really need to know about `np_conserved`
+-------------------------------------------------
+
+The good news is: It is not necessary to understand all the details explained in the following sections
+if you just want to use TeNPy for "standard" simulations like TEBD and DMRG.
+In praxis, **you will likely not have to define the charges by yourself**.
+For most simulations using TeNPy, the charges are initially defined in the tenpy.networks.site.Site;
+and there are many pre-defined sites like the :class:tenpy.networks.site.SpinHalfSite, which you can just use.
+The sites in turn are initialized by the Model class you are using (see also :doc:`/intro/model`).
+From there, all the necessary charge information is automatically propagated along with the tensors.
+
+
+However, you should definitely know a few basic facts about the usage of charge conservation in TeNPy:
+
+- Instead of using numpy arrays, tensors are represented by the tenpy.linalg.np_conserved.Array class.
+  This class is defined in tenpy.linalg.np_conserved (the name standing for "numpy with charge conservation").
+  Internally, it stores only non-zero blocks of the tensor, which are "compatible" with the charges of the indices.
+  It **has to have a well defined overall charge** tenpy.linalg.np_conserved.Array.qtotal.
+  This **excludes certain operators** (like :math:`S^x` for Sz conservation) and MPS which are a superpositions of states in different charge sectors.
+- There is a class tenpy.linalg.charges.ChargeInfo holding the general information what kind of charges we have,
+  and a tenpy.linalg.charges.LegCharge for the charge data on a given leg. The leg holds a flag `qconj` which
+  is +1 or -1, depending on whether the leg goes into the tensor (representing a vector space)
+  or out of the tensor (representing the corresponding dual vector space).
+- Besides the array class methods, there are a bunch of functions like tenpy.linalg.np_conserved.tensordot,
+  tenpy.linalg.np_conserved.svd or tenpy.linalg.np_conserved.eigh to manipulate tensors.
+  These function have a very similar call structure as the corresponding numpy functions, but they act on our tensor
+  Array class, and preserve the block structure (and exploit it for speed, wherever possible).
+- The only allowed "reshaping" operations for those tensors are to combine legs and to split previously combined legs.
+  See the corresponding :ref:`section below <leg_pipes>`.
+- It is convenient to use string labels instead of numbers to refer to the various legs of a tensor.
+  The rules how these labels change during the various operations are also described a :ref:`section below <leg_labeling>`.
+
+
+
+Introduction to combine_legs, split_legs and LegPipes
+-----------------------------------------------------
+
+Often, it is necessary to "combine" multiple legs into one: for example to perform a SVD, a tensor needs to be viewed as a matrix.
+For a flat array, this can be done with ``np.reshape``, e.g., if ``A`` has shape ``(10, 3, 7)`` then ``B = np.reshape(A, (30, 7))`` will
+result in a (view of the) array with one less dimension, but a "larger" first leg. By default (``order='C'``), this
+results in ::
+
+    B[i*3 + j , k] == A[i, j, k] for i in range(10) for j in range(3) for k in range(7)
+
+While for a np.array, also a reshaping ``(10, 3, 7) -> (2, 21, 5)`` would be allowed, it does not make sense
+physically. The only sensible "reshape" operation on an tenpy.linalg.np_conserved.Array are
+
+1) to **combine** multiple legs into one **leg pipe** (tenpy.linalg.charges.LegPipe) with  tenpy.linalg.np_conserved.Array.combine_legs, or
+2) to **split** a pipe of previously combined legs with tenpy.linalg.np_conserved.Array.split_legs.
+
+Each leg has a Hilbert space, and a representation of the symmetry on that Hilbert space.
+Combining legs corresponds to the tensor product operation, and for abelian groups,
+the corresponding "fusion" of the representation is the simple addition of charge.
+
+Fusion is not a lossless process, so if we ever want to split the combined leg,
+we need some additional data to tell us how to reverse the tensor product.
+This data is saved in the class tenpy.linalg.charges.LegPipe, derived from the tenpy.linalg.charges.LegCharge and used as new `leg`.
+Details of the information contained in a LegPipe are given in the class doc string.
+
+The rough usage idea is as follows:
+
+1) You can call tenpy.linalg.np_conserved.Array.combine_legs without supplying any LegPipes, `combine_legs` will then make them for you.
+
+   Nevertheless, if you plan to perform the combination over and over again on sets of legs you know to be identical
+   [with same charges etc, up to an overall -1 in `qconj` on all incoming and outgoing Legs]
+   you might make a LegPipe anyway to save on the overhead of computing it each time.
+2) In any way, the resulting Array will have a tenpy.linalg.charges.LegPipe as a LegCharge on the combined leg.
+   Thus, it -- and all tensors inheriting the leg (e.g. the results of `svd`, `tensordot` etc.) -- will have the information
+   how to split the `LegPipe` back to the original legs.
+3) Once you performed the necessary operations, you can call tenpy.linalg.Array.split_legs.
+   This uses the information saved in the `LegPipe` to split the legs, recovering the original legs.
+
+For a LegPipe, tenpy.linalg.charges.LegPipe.conj changes ``qconj`` for the outgoing pipe *and* the incoming legs.
+If you need a `LegPipe` with the same incoming ``qconj``, use tenpy.linalg.charges.LegPipe.outer_conj.
+
+
+
+Leg labeling
+------------
+
+It's convenient to name the legs of a tensor: for instance, we can name legs 0, 1, 2 to be ``'a', 'b', 'c'``: :math:`T_{i_a,i_b,i_c}`.
+That way we don't have to remember the ordering! Under tensordot, we can then call ::
+
+    U = npc.tensordot(S, T, axes = [ [...],  ['b'] ] )
+
+without having to remember where exactly ``'b'`` is.
+Obviously ``U`` should then inherit the name of its legs from the uncontracted legs of `S` and `T`.
+So here is how it works:
+
+- Labels can *only* be strings. The labels should not include the characters ``.`` or ``?``.
+  Internally, the labels are stored as dict ``a.labels = {label: leg_position, ...}``. Not all legs need a label.
+- To set the labels, call ::
+
+        A.set_labels(['a', 'b', None, 'c', ... ])
+
+  which will set up the labeling ``{'a': 0, 'b': 1, 'c': 3 ...}``.
+
+- (Where implemented) the specification of axes can use either the labels **or** the index positions.
+  For instance, the call ``tensordot(A, B, [['a', 2, 'c'], [...]])`` will interpret ``'a'`` and  ``'c'`` as labels
+  (calling tenpy.linalg.np_conserved.Array.get_leg_indices to find their positions using the dict)
+  and 2 as 'the 2nd leg'. That's why we require labels to be strings!
+- Labels will be intelligently inherited through the various operations of `np_conserved`.
+    - Under `transpose`, labels are permuted.
+    - Under `tensordot`, labels are inherited from uncontracted legs. If there is a collision, both labels are dropped.
+    - Under `combine_legs`, labels get concatenated with a ``.`` delimiter and surrounded by brackets.
+      Example: let ``a.labels = {'a': 1, 'b': 2, 'c': 3}``.
+      Then if ``b = a.combine_legs([[0, 1], [2]])``, it will have ``b.labels = {'(a.b)': 0, '(c)': 1}``.
+      If some sub-leg of a combined leg isn't named, then a ``'?#'`` label is inserted (with ``#`` the leg index), e.g., ``'a.?0.c'``.
+    - Under `split_legs`, the labels are split using the delimiters (and the ``'?#'`` are dropped).
+    - Under `conj`, `iconj`: take  ``'a' -> 'a*'``, ``'a*' -> 'a'``, and ``'(a.(b*.c))' -> '(a*.(b.c*))'``
+    - Under `svd`, the outer labels are inherited, and inner labels can be optionally passed.
+    - Under `pinv`, the labels are transposed.
+
+
+
+Indexing of an Array
+--------------------
+
+Although it is usually not necessary to access single entries of an tenpy.linalg.np_conserved.Array, you can of course do that.
+In the simplest case, this is something like ``A[0, 2, 1]`` for a rank-3 Array ``A``.
+However, accessing single entries is quite slow and usually not recommended. For small Arrays, it may be convenient to convert them
+back to flat numpy arrays with tenpy.linalg.np_conserved.Array.to_ndarray.
+
+On top of that very basic indexing, `Array` supports slicing and some kind of advanced indexing, which is however
+different from the one of numpy arrays (described `here <http://docs.scipy.org/doc/numpy/reference/arrays.indexing.html>`_).
+Unlike numpy arrays, our Array class does not broadcast existing index arrays -- this would be terribly slow.
+Also, `np.newaxis` is not supported, since inserting new axes requires additional information for the charges.
+
+Instead, we allow just indexing of the legs independent of each other, of the form ``A[i0, i1, ...]``.
+If all indices ``i0, i1, ...`` are integers, the single corresponding entry (of type `dtype`) is returned.
+
+However, the individual 'indices' ``i0`` for the individual legs can also be one of what is described in the following list.
+In that case, a new tenpy.linalg.np_conserved.Array with less data (specified by the indices) is returned.
+
+The 'indices' can be:
+
+- an `int`: fix the index of that axis, return array with one less dimension. See also tenpy.linalg.np_conserved.Array.take_slice.
+- a ``slice(None)`` or ``:``: keep the complete axis
+- an ``Ellipsis`` or ``...``: shorthand for ``slice(None)`` for missing axes to fix the len
+- an 1D bool `ndarray` ``mask``: apply a mask to that axis, see tenpy.linalg.np_conserved.Array.iproject.
+- a ``slice(start, stop, step)`` or ``start:stop:step``: keep only the indices specified by the slice. This is also implemented with `iproject`.
+- an 1D int `ndarray` ``mask``: keep only the indices specified by the array. This is also implemented with `iproject`.
+
+For slices and 1D arrays, additional permutations may be performed with the help of tenpy.linalg.np_conserved.Array.permute.
+
+If the number of indices is less than `rank`, the remaining axes remain free, so for a rank 4 Array ``A``, ``A[i0, i1] == A[i0, i1, ...] == A[i0, i1, :, :]``.
+
+Note that indexing always **copies** the data -- even if `int` contains just slices, in which case numpy would return a view.
+However, assigning with ``A[:, [3, 5], 3] = B`` should work as you would expect.
+
+
+    Due to numpy's advanced indexing, for 1D integer arrays ``a0`` and ``a1`` the following holds ::
+
+        A[a0, a1].to_ndarray() == A.to_ndarray()[np.ix_(a0, a1)] != A.to_ndarray()[a0, a1]
+
+    For a combination of slices and arrays, things get more complicated with numpys advanced indexing.
+    In that case, a simple ``np.ix_(...)`` doesn't help any more to emulate our version of indexing.
+
+
+
+Details of the `np_conserved` implementation
+--------------------------------------------
+
+Notations
++++++++++
+Lets fix the notation of certain terms for this introduction and the doc-strings in tenpy.linalg.np_conserved.
+This might be helpful if you know the basics from a different context.
+If you're new to the subject, keep reading even if you don't understand each detail,
+and come back to this section when you encounter the corresponding terms again.
+
+A tenpy.linalg.np_conserved.Array is a multi-dimensional array representing a **tensor** with the entries:
+
+   T_{a_0, a_1, ... a_{rank-1}} \quad \text{ with } \quad a_i \in \lbrace 0, ..., n_i-1 \rbrace
+
+Each **leg** a_i corresponds the a vector space of dimension `n_i`.
+
+An **index** of a leg is a particular value :math:`a_i \in \lbrace 0, ... ,n_i-1\rbrace`.
+
+The **rank** is the number of legs, the **shape** is :math:`(n_0, ..., n_{rank-1})`.
+
+We restrict ourselves to abelian charges with entries in :math:`\mathbb{Z}` or in :math:`\mathbb{Z}_m`.
+The nature of a charge is specified by m; we set :math:`m=1` for charges corresponding to :math:`\mathbb{Z}`.
+The number of charges is referred to as **qnumber** as a short hand, and the collection of m for each charge is called **qmod**.
+The qnumber, qmod and possibly descriptive names of the charges are saved in an instance of tenpy.linalg.charges.ChargeInfo.
+
+To each index of each leg, a value of the charge(s) is associated.
+A **charge block** is a contiguous slice corresponding to the same charge(s) of the leg.
+A **qindex** is an index in the list of charge blocks for a certain leg.
+A **charge sector** is for given charge(s) is the set of all qindices of that charge(s).
+A leg is **blocked** if all charge sectors map one-to-one to qindices.
+Finally, a leg is **sorted**, if the charges are sorted lexicographically.
+Note that a `sorted` leg is always `blocked`.
+We can also speak of the complete array to be **blocked by charges** or **legcharge-sorted**,  which means that all of its legs are blocked or sorted, respectively.
+The charge data for a single leg is collected in the class tenpy.linalg.charges.LegCharge.
+A tenpy.linalg.charges.LegCharge has also a flag **qconj**, which tells whether the charges
+point *inward* (+1) or *outward* (-1). What that means, is explained later in nonzero_entries.
+
+For completeness, let us also summarize also the internal structure of an tenpy.linalg.np_conserved.Array here:
+The array saves only non-zero **blocks**, collected as a list of `np.array` in ``self._data``.
+The qindices necessary to map these blocks to the original leg indices are collected in ``self._qdata``
+An array is said to be **qdata-sorted** if its ``self._qdata`` is lexicographically sorted.
+More details on this follow :ref:`later <array_storage_schema>`.
+However, note that you usually shouldn't access `_qdata` and `_data` directly - this
+is only necessary from within `tensordot`, `svd`, etc.
+Also, an array has a **total charge**, defining which entries can be non-zero - details in nonzero_entries.
+
+Finally, a **leg pipe** (implemented in tenpy.linalg.charges.LegPipe)
+is used to formally combine multiple legs into one leg. Again, more details follow :ref:`later <leg_pipes>`.
+
+
+Physical Example
+++++++++++++++++
+For concreteness, you can think of the Hamiltonian :math:`H = -t \sum_{<i,j>} (c^\dagger_i c_j + H.c.) + U n_i n_j`
+with :math:`n_i = c^\dagger_i c_i`.
+This Hamiltonian has the global :math:`U(1)` gauge symmetry :math:`c_i \rightarrow c_i e^{i\phi}`.
+The corresponding charge is the total number of particles :math:`N = \sum_i n_i`.
+You would then introduce one charge with :math:`m=1`.
+
+Note that the total charge is a sum of local terms, living on single sites.
+Thus, you can infer the charge of a single physical site: it's just the value :math:`q_i = n_i \in \mathbb{N}` for each of the states.
+
+Note that you can only assign integer charges. Consider for example the spin 1/2 Heisenberg chain.
+Here, you can naturally identify the magnetization :math:`S^z = \sum_i S^z_i` as the conserved quantity,
+with values :math:`S^z_i = \pm \frac{1}{2}`.
+Obviously, if :math:`S^z` is conserved, then so is :math:`2 S^z`, so you can use the charges
+:math:`q_i = 2 S^z_i \in \lbrace-1, +1 \rbrace` for the `down` and `up` states, respectively.
+Alternatively, you can also use a shift and define :math:`q_i = S^z_i + \frac{1}{2} \in \lbrace 0, 1 \rbrace`.
+
+As another example, consider BCS like terms :math:`\sum_k (c^\dagger_k c^\dagger_{-k} + H.c.)`.
+These terms break the total particle conservation,
+but they preserve the total parity, i.e., :math:`N \mod 2` is conserved. Thus, you would introduce a charge with :math:`m = 2` in this case.
+
+In the above examples, we had only a single charge conserved at a time, but you might be lucky and have multiple
+conserved quantities, e.g. if you have two chains coupled only by interactions.
+TeNPy is designed to handle the general case of multiple charges.
+When giving examples, we will restrict to one charge, but everything generalizes to multiple charges.
+
+
+The different formats for LegCharge
++++++++++++++++++++++++++++++++++++
+As mentioned above, we assign charges to each index of each leg of a tensor.
+This can be done in three formats: **qflat**, as **qind** and as **qdict**.
+Let me explain them with examples, for simplicity considering only a single charge (the most inner array has one entry
+for each charge).
+
+**qflat** form: simply a list of charges for each index.
+    An example::
+
+        qflat = [[-2], [-1], [-1], [0], [0], [0], [0], [3], [3]]
+
+    This tells you that the leg has size 9, the charges for are ``[-2], [-1], [-1], ..., [3]`` for the indices ``0, 1, 2, 3,..., 8``.
+    You can identify four `charge blocks` ``slice(0, 1), slice(1, 3), slice(3, 7), slice(7, 9)`` in this example, which have charges ``[-2], [-1], [0], [3]``.
+    In other words, the indices ``1, 2`` (which are in ``slice(1, 3)``) have the same charge value ``[-1]``.
+    A `qindex` would just enumerate these blocks as ``0, 1, 2, 3``.
+
+**qind** form: a 1D array `slices` and a 2D array `charges`.
+    This is a more compact version than the `qflat` form:
+    the `slices` give a partition of the indices and the `charges` give the charge values. The same example as above
+    would simply be::
+
+        slices = [0, 1, 3, 7, 9]
+        charges = [[-2], [-1], [0], [3]]
+
+
+    Note that  `slices` includes ``0`` as first entry and the number of indices (here ``9``) as last entries.
+    Thus it has len ``block_number + 1``, where ``block_number`` (given by tenpy.linalg.charges.LegCharge.block_number)
+    is the number of charge blocks in the leg, i.e. a `qindex` runs from 0 to ``block_number-1``.
+    On the other hand, the 2D array `charges` has shape ``(block_number, qnumber)``, where ``qnumber`` is the
+    number of charges (given by tenpy.linalg.charges.ChargeInfo.qnumber).
+
+    In that way, the `qind` form maps an `qindex`, say ``qi``, to the indices ``slice(slices[qi], slices[qi+1])`` and
+    the charge(s) ``charges[qi]``.
+
+
+**qdict** form: a dictionary in the other direction than qind, taking charge tuples to slices.
+    Again for the same example::
+
+        {(-2,): slice(0, 1),
+         (-1,): slice(1, 3),
+         (0,) : slice(3, 7),
+         (3,) : slice(7, 9)}
+
+    Since the keys of a dictionary are unique, this form is only possible if the leg is `completely blocked`.
+
+
+The tenpy.linalg.charges.LegCharge saves the charge data of a leg internally in `qind` form,
+directly in the attribute `slices` and `charges`.
+However, it also provides convenient functions for conversion between from and to the `qflat` and `qdict` form.
+
+The above example was nice since all charges were sorted and the charge blocks were 'as large as possible'.
+This is however not required.
+
+The following example is also a valid `qind` form::
+
+    slices = [0, 1, 3, 5, 7, 9]
+    charges = [[-2], [-1], [0], [0], [3]]
+
+This leads to the *same* `qflat` form as the above examples, thus representing the same charges on the leg indices.
+However, regarding our Arrays, this is quite different, since it divides the leg into 5 (instead of previously 4)
+charge blocks. We say the latter example is `not bunched`, while the former one is `bunched`.
+
+To make the different notions of `sorted` and `bunched` clearer, consider the following (valid) examples:
+
+================================  =========  =========  ==========
+charges                           bunched    sorted     blocked
+================================  =========  =========  ==========
+``[[-2], [-1], [0], [1], [3]]``   ``True``   ``True``   ``True``
+--------------------------------  ---------  ---------  ----------
+``[[-2], [-1], [0], [0], [3]]``   ``False``  ``True``   ``False``
+--------------------------------  ---------  ---------  ----------
+``[[-2], [0], [-1], [1], [3]]``   ``True``   ``False``  ``True``
+--------------------------------  ---------  ---------  ----------
+``[[-2], [0], [-1], [0], [3]]``   ``True``   ``False``  ``False``
+================================  =========  =========  ==========
+
+If a leg is `bunched` and `sorted`, it is automatically `blocked` (but not vice versa).
+See also :ref:`below <blocking>` for further comments on that.
+
+
+
+Which entries of the npc Array can be non-zero?
++++++++++++++++++++++++++++++++++++++++++++++++
+The reason for the speedup with np_conserved lies in the fact that it saves only the blocks 'compatible' with the charges.
+But how is this 'compatible' defined?
+
+Assume you have a tensor, call it T, and the tenpy.linalg.charges.LegCharge for all of its legs, say :math:`a, b, c, ...`.
+
+Remember that the LegCharge associates to each index of the leg a charge value (for each of the charges, if `qnumber` > 1).
+Let ``a.to_qflat()[ia]`` denote the charge(s) of index ``ia`` for leg ``a``, and similar for other legs.
+
+In addition, the LegCharge has a flag tenpy.linalg.charges.LegCharge.qconj. This flag **qconj** is only a sign,
+saved as +1 or -1, specifying whether the charges point 'inward' (+1, default) or 'outward' (-1) of the tensor.
+
+Then, the **total charge of an entry** ``T[ia, ib, ic, ...]`` of the tensor is defined as::
+
+   qtotal[ia, ib, ic, ...] = a.to_qflat()[ia] * a.qconj + b.to_qflat()[ib] * b.qconj + c.to_qflat()[ic] * c.qconj + ...  modulo qmod
+
+The rule which entries of the a tenpy.linalg.np_conserved.Array can be non-zero
+(i.e., are 'compatible' with the charges), is then very simple:
+
+
+    An entry ``ia, ib, ic, ...`` of a tenpy.linalg.np_conserved.Array can only be non-zero,
+    if ``qtotal[ia, ib, ic, ...]`` matches the *unique* tenpy.linalg.np_conserved.qtotal attribute of the class.
+
+In other words, there is a *single* **total charge** ``.qtotal`` attribute of a tenpy.linalg.np_conserved.Array.
+All indices ``ia, ib, ic, ...`` for which the above defined ``qtotal[ia, ib, ic, ...]`` matches this `total charge`,
+are said to be **compatible with the charges** and can be non-zero.
+All other indices are **incompatible with the charges** and must be zero.
+
+In case of multiple charges, `qnumber` > 1, is a straight-forward generalization:
+an entry can only be non-zero if it is `compatible` with each of the defined charges.
+
+
+The pesky qconj - contraction as an example
++++++++++++++++++++++++++++++++++++++++++++
+Why did we introduce the ``qconj`` flag? Remember it's just a sign telling whether the charge points inward or outward.
+So whats the reasoning?
+
+The short answer is, that LegCharges actually live on bonds (i.e., legs which are to be contracted)
+rather than individual tensors. Thus, it is convenient to share the LegCharges between different legs and even tensors,
+and just adjust the sign of the charges with `qconj`.
+
+As an example, consider the contraction of two tensors, :math:`C_{ia,ic} = \sum_{ib} A_{ia,ib} B_{ib,ic}`.
+For simplicity, say that the total charge of all three tensors is zero.
+What are the implications of the above rule for non-zero entries?
+Or rather, how can we ensure that ``C`` complies with the above rule?
+An entry ``C[ia,ic]`` will only be non-zero,
+if there is an ``ib`` such that both ``A[ia,ib]`` and ``B[ib,ic]`` are non-zero, i.e., both of the following equations are
+fulfilled::
+
+    A.qtotal == A.legs[0].to_qflat()[ia] * A.legs[0].qconj + A.legs[1].to_qflat()[ib] * A.legs[1].qconj  modulo qmod
+    B.qtotal == B.legs[0].to_qflat()[ib] * B.legs[0].qconj + B.legs[1].to_qflat()[ic] * B.legs[1].qconj  modulo qmod
+
+(``A.legs[0]`` is the tenpy.linalg.charges.LegCharge saving the charges of the first leg (with index ``ia``) of `A`.)
+
+For the uncontracted legs, we just keep the charges as they are::
+
+    C.legs = [A.legs[0], B.legs[1]]
+
+It is then straight-forward to check, that the rule is fulfilled for C, if the following condition is met::
+
+   A.qtotal + B.qtotal - C.qtotal == A.legs[1].to_qflat()[ib] A.b.qconj + B.legs[0].to_qflat()[ib] B.b.qconj  modulo qmod
+
+The easiest way to meet this condition is (1) to require that ``A.b`` and ``B.b`` share the *same* charges ``b.to_qflat()``, but have
+opposite `qconj`, and (2) to define ``C.qtotal = A.qtotal + B.qtotal``.
+This justifies the introduction of `qconj`:
+when you define the tensors, you have to define the tenpy.linalg.charges.LegCharge for the `b` only once, say for ``A.legs[1]``.
+For ``B.legs[0]`` you simply use ``A.legs[1].conj()`` which creates a copy of the LegCharge with shared `slices` and `charges`, but opposite `qconj`.
+As a more impressive example, all 'physical' legs of an MPS can usually share the same
+tenpy.linalg.charges.LegCharge (up to different ``qconj`` if the local Hilbert space is the same).
+This leads to the following convention:
+
+
+   When an npc algorithm makes tensors which share a bond (either with the input tensors, as for tensordot, or amongst the output tensors, as for SVD),
+   the algorithm is free, but not required, to use the **same** LegCharge for the tensors sharing the bond, *without* making a copy.
+   Thus, if you want to modify a LegCharge, you **must** make a copy first (e.g. by using methods of LegCharge for what you want to achieve).
+
+
+Assigning charges to non-physical legs
+++++++++++++++++++++++++++++++++++++++
+From the above physical examples, it should be clear how you assign charges to physical legs.
+But what about other legs, e.g, the virtual bond of an MPS (or an MPO)?
+
+The charge of these bonds must be derived by using the 'rule for non-zero entries', as far as they are not arbitrary.
+As a concrete example, consider an MPS on just two spin 1/2 sites::
+
+    |        _____         _____
+    |   x->- | A | ->-y->- | B | ->-z
+    |        -----         -----
+    |          ^             ^
+    |          |p            |p
+
+The two legs ``p`` are the physical legs and share the same charge, as they both describe the same local Hilbert space.
+For better distinction, let me label the indices of them by :math:`\uparrow=0` and :math:`\downarrow=1`.
+As noted above, we can associate the charges 1 (:math:`p=\uparrow`) and -1 (:math:`p=\downarrow`), respectively, so we define::
+
+    chinfo = npc.ChargeInfo([1], ['2*Sz'])
+    p  = npc.LegCharge.from_qflat(chinfo, [1, -1], qconj=+1)
+
+For the ``qconj`` signs, we stick to the convention used in our MPS code and indicated by the
+arrows in above 'picture': physical legs are incoming (``qconj=+1``), and from left to right on the virtual bonds.
+This is achieved by using ``[p, x, y.conj()]`` as `legs` for ``A``, and ``[p, y, z.conj()]`` for ``B``, with the
+default ``qconj=+1`` for all ``p, x, y, z``: ``y.conj()`` has the same charges as ``y``, but opposite ``qconj=-1``.
+
+The legs ``x`` and ``z`` of an ``L=2`` MPS, are 'dummy' legs with just one index ``0``.
+The charge on one of them, as well as the total charge of both ``A`` and ``B`` is arbitrary (i.e., a gauge freedom),
+so we make a simple choice: total charge 0 on both arrays, as well as for :math:`x=0`,
+``x = npc.LegCharge.from_qflat(chinfo, [0], qconj=+1)``.
+
+The charges on the bonds `y` and `z` then depend on the state the MPS represents.
+Here, we consider a singlet :math:`\psi = (|\uparrow \downarrow\rangle  - |\downarrow \uparrow\rangle)/\sqrt{2}`
+as a simple example. A possible MPS representation is given by::
+
+    A[up, :, :]   = [[1/2.**0.5, 0]]     B[up, :, :]   = [[0], [-1]]
+    A[down, :, :] = [[0, 1/2.**0.5]]     B[down, :, :] = [[1], [0]]
+
+There are two non-zero entries in ``A``, for the indices :math:`(a, x, y) = (\uparrow, 0, 0)` and :math:`(\downarrow, 0, 1)`.
+For :math:`(a, x, y) = (\uparrow, 0, 0)`, we want::
+
+    A.qtotal = 0 = p.to_qflat()[up] * p.qconj + x.to_qflat()[0] * x.qconj + y.conj().to_qflat()[0] * y.conj().qconj
+                 = 1                * (+1)    + 0               * (+1)    + y.conj().to_qflat()[0] * (-1)
+
+This fixes the charge of ``y=0`` to 1.
+A similar calculation for :math:`(a, x, y) = (\downarrow, 0, 1)` yields the charge ``-1`` for ``y=1``.
+We have thus all the charges of the leg ``y`` and can define ``y = npc.LegCharge.from_qflat(chinfo, [1, -1], qconj=+1)``.
+
+Now take a look at the entries of ``B``.
+For the non-zero entry :math:`(b, y, z) = (\uparrow, 1, 0)`, we want::
+
+    B.qtotal = 0 = p.to_qflat()[up] * p.qconj + y.to_qflat()[1] * y.qconj + z.conj().to_qflat()[0] * z.conj().qconj
+                 = 1                * (+1)    + (-1)            * (+1)    + z.conj().to_qflat()[0] * (-1)
+
+This implies the charge 0 for `z` = 0, thus ``z = npc.LegCharge.form_qflat(chinfo, [0], qconj=+1)``.
+Finally, note that the rule for :math:`(b, y, z) = (\downarrow, 0, 0)` is automatically fulfilled!
+This is an implication of the fact that the singlet has a well defined value for :math:`S^z_a + S^z_b`.
+For other states without fixed magnetization (e.g., :math:`|\uparrow \uparrow\rangle + |\downarrow \downarrow\rangle`)
+this would not be the case, and we could not use charge conservation.
+
+As an exercise, you can calculate the charge of `z` in the case that ``A.qtotal=5``, ``B.qtotal = -1`` and
+charge ``2`` for ``x=0``. The result is -2.
+
+
+    This section is meant be an pedagogical introduction. In you program, you can use the functions
+    tenpy.linalg.np_conserved.detect_legcharge (which does exactly what's described above) or
+    tenpy.linalg.np_conserved.detect_qtotal (if you know all `LegCharges`, but not `qtotal`).
+
+Array creation
+++++++++++++++
+
+Direct creation
+^^^^^^^^^^^^^^^
+
+Making an new tenpy.linalg.np_conserved.Array requires both the tensor entries (data) and charge data.
+
+The default initialization ``a = Array(...)`` creates an empty Array, where all entries are zero
+(equivalent to tenpy.linalg.np_conserved.zeros).
+(Non-zero) data can be provided either as a dense `np.array` to tenpy.linalg.np_conserved.Array.from_ndarray,
+or by providing a numpy function such as `np.random`, `np.ones` etc. to tenpy.linalg.np_conserved.Array.from_func.
+
+In both cases, the charge data is provided by one tenpy.linalg.charges.ChargeInfo,
+and a tenpy.linalg.charges.LegCharge instance for each of the legs.
+
+
+    The charge data instances are not copied, in order to allow it to be shared between different Arrays.
+    Consequently, you *must* make copies of the charge data, if you manipulate it directly.
+    (However, methods like tenpy.linalg.charges.LegCharge.sort do that for you.)
+
+
+Indirect creation by manipulating existing arrays
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Of course, a new tenpy.linalg.np_conserved.Array can also created using the charge data from existing Arrays,
+for example with tenpy.linalg.np_conserved.Array.zeros_like or creating a (deep or shallow) tenpy.linalg.np_conserved.Array.copy.
+Further, there are many higher level functions like tenpy.linalg.np_conserved.tensordot or tenpy.linalg.np_conserved.svd,
+which also return new Arrays.
+
+
+
+Complete blocking of Charges
+++++++++++++++++++++++++++++
+
+While the code was designed in such a way that each charge sector has a different charge, the code
+should still run correctly if multiple charge sectors (for different qindex) correspond to the same charge.
+In this sense tenpy.linalg.np_conserved.Array can act like a sparse array class to selectively store subblocks.
+Algorithms which need a full blocking should state that explicitly in their doc-strings.
+(Some functions (like `svd` and `eigh`) require complete blocking internally, but if necessary they just work on
+a temporary copy returned by tenpy.linalg.np_conserved.as_completely_blocked).
+
+If you expect the tensor to be dense subject to charge constraints (as for MPS),
+it will be most efficient to fully block by charge, so that work is done on large chunks.
+
+However, if you expect the tensor to be sparser than required by charge (as for an MPO),
+it may be convenient not to completely block, which forces smaller matrices to be stored, and hence many zeroes to be dropped.
+Nevertheless, the algorithms were not designed with this in mind, so it is not recommended in general.
+(If you want to use it, run a benchmark to check whether it is really faster!)
+
+If you haven't created the array yet, you can call tenpy.linalg.charges.LegCharge.sort (with ``bunch=True``)
+on each tenpy.linalg.charges.LegCharge which you want to block.
+This sorts by charges and thus induces a permutation of the indices, which is also returned as an 1D array ``perm``.
+For consistency, you have to apply this permutation to your flat data as well.
+
+Alternatively, you can simply call tenpy.linalg.np_conserved.Array.sort_legcharge on an existing tenpy.linalg.np_conserved.Array.
+It calls tenpy.linalg.charges.LegCharge.sort internally on the specified legs and performs the necessary
+permutations directly to (a copy of) `self`. Yet, you should keep in mind, that the axes are permuted afterwards.
+
+
+
+Internal Storage schema of npc Arrays
++++++++++++++++++++++++++++++++++++++
+
+The actual data of the tensor is stored in ``_data``. Rather than keeping a single np.array (which would have many zeros in it),
+we store only the non-zero sub blocks. So ``_data`` is a python list of `np.array`'s.
+The order in which they are stored in the list is not physically meaningful, and so not guaranteed (more on this later).
+So to figure out where the sub block sits in the tensor, we need the ``_qdata`` structure (on top of the LegCharges in ``legs``).
+
+Consider a rank 3 tensor ``T``, with the first leg like::
+
+    legs[0].slices = np.array([0, 1, 4, ...])
+    legs[0].charges = np.array([[-2], [1], ...])
+
+Each row of `charges` gives the charges for a `charge block` of the leg, with the actual indices of the
+total tensor determined by the `slices`.
+The *qindex* simply enumerates the charge blocks of a lex.
+Picking a qindex (and thus a `charge block`) from each leg, we have a subblock of the tensor.
+
+For each (non-zero) subblock of the tensor, we put a (numpy) ndarray entry in the ``_data`` list.
+Since each subblock of the tensor is specified by `rank` qindices,
+we put a corresponding entry in ``_qdata``, which is a 2D array of shape ``(#stored_blocks, rank)``.
+Each row corresponds to a non-zero subblock, and there are rank columns giving the corresponding qindex for each leg.
+
+Example: for a rank 3 tensor we might have::
+
+    T._data = [t1, t2, t3, t4, ...]
+    T._qdata = np.array([[3, 2, 1],
+                         [1, 1, 1],
+                         [4, 2, 2],
+                         [2, 1, 2],
+                         ...       ])
+
+The third subblock has an ndarray ``t3``, and qindices ``[4 2 2]`` for the three legs.
+
+- To find the position of ``t3`` in the actual tensor you can use tenpy.linalg.charges.LegCharge.get_slice::
+
+            T.legs[0].get_slice(4), T.legs[1].get_slice(2), T.legs[2].get_slice(2)
+
+  The function ``leg.get_charges(qi)`` simply returns ``slice(leg.slices[qi], leg.slices[qi+1])``
+
+- To find the charges of t3, we an use tenpy.linalg.charges.LegCharge.get_charge::
+
+            T.legs[0].get_charge(2), T.legs[1].get_charge(2), T.legs[2].get_charge(2)
+
+  The function ``leg.get_charge(qi)`` simply returns ``leg.charges[qi]*leg.qconj``.
+
+
+   Outside of `np_conserved`, you should use the API to access the entries.
+   If you really need to iterate over all blocks of an Array ``T``, try ``for (block, blockslices, charges, qindices) in T: do_something()``.
+
+The order in which the blocks stored in ``_data``/``_qdata`` is arbitrary (although of course ``_data`` and ``_qdata`` must be in correspondence).
+However, for many purposes it is useful to sort them according to some convention.  So we include a flag ``._qdata_sorted`` to the array.
+So, if sorted (with tenpy.linalg.np_conserved.Array.isort_qdata, the ``_qdata`` example above goes to ::
+
+    _qdata = np.array([[1, 1, 1],
+                       [3, 2, 1],
+                       [2, 1, 2],
+                       [4, 2, 2],
+                       ...       ])
+
+Note that `np.lexsort` chooses the right-most column to be the dominant key, a convention we follow throughout.
+
+If ``_qdata_sorted == True``, ``_qdata`` and ``_data`` are guaranteed to be lexsorted. If ``_qdata_sorted == False``, there is no guarantee.
+If an algorithm modifies ``_qdata``, it **must** set ``_qdata_sorted = False`` (unless it guarantees it is still sorted).
+The routine tenpy.linalg.np_conserved.Array.sort_qdata brings the data to sorted form.
+
+
+
+Dipole Conservation
+-------------------
+
+Normally, a conserved charge has the form :math:`Q = \sum_i q_i` where the local charge q_i
+is (the expectation value of) some operator which does not explicitly depend on the position of the
+site i it acts on. E.g. :math:`q_i = 2 * S_i^z` is independent of i in that sense.
+
+Some models, see e.g. tenpy.models.spins.DipolarSpinChain, have a symmetry which conserves
+a charge that does not follow the above scheme.
+The dipole charge of this model is :math:`P = \sum_i p_i = \sum_i r_i q_i`, where r_i is the
+position of the site i. Clearly, the local charge p_i depends in the position of
+the site i.
+
+We support a general framework for conserved charges where the local charge has some non-trivial
+transformation properties under spatial translations.
+We do require, however, that the effect of spatial translation on a charge is independent of
+the starting position and only depends on the vector of translation.
+Relaxing this assumption (e.g. to conserve quadrupole moments) would require substantially more
+book-keeping and I (Jakob Unfried) am not even sure infinite MPS with such charges can be well
+defined.
+
+We internally refer to such symmetries as "shift-symmetry" and we call the transformation of
+charges / legs / sites or arrays that results from spatial translations "shifting".
+We implement methods in tenpy.linalg.charges.ChargeInfo that define how the charges
+transform. The base class tenpy.linalg.charges.ChargeInfo implements only trivial
+versions of these methods, that do not change the charges at all.
+It models charges with trivial translation properties, indicated by
+tenpy.linalg.charges.ChargeInfo.trivial_shift being ``True``.
+Non-trivially transforming charges should then be implemented in subclasses, such as
+tenpy.linalg.charges.DipolarChargeInfo.
+
+The subclass tenpy.linalg.charges.DipolarChargeInfo supports one (or multiple) charges of
+the dipole form above, i.e. :math:`p_i = r_i q_i` where q_i is another "normal" conserved
+charge. See its docstring for further details on how to use it
+and tenpy.models.spins.DipolarSpinChain as an example that does.
+
+Such a charge with non-tenpy.linalg.charges.ChargeInfo.trivial_shift has the following main
+implications for MPS simulations in tenpy
+
+- The tenpy.networks.mps.MPS.sites of an MPS are no longer just given by the sites in the
+  tenpy.models.lattice.Lattice.unit_cell. If the MPS unit cell consists of multiple unit
+  cells of the lattice, the new positions of the site need be considered, since they affect the
+  charge values of the p_i on the respective physical legs.
+  We perform this shift in tenpy.models.lattice.Lattice.mps_sites.
+
+- For sweeping algorithms using infinite MPS, the charges also need to be adjusted when neighboring
+  unit cells are inserted, e.g. when a two-site update on sites ``L - 1, L`` is performed, the
+  (i)MPS tensor on site ``L`` is not the *same* as the one on site ``0``, but rather a shifted version.
+  We account for this in tenpy.networks.mps.MPS.get_B, tenpy.networks.mps.MPS.set_B
+  and in the similar methods for `S`.
+  Generally speaking , whenever the identification of arrays, sites or any quantity that carries
+  charge, between different unit cells of the iMPS is used, shifting needs to be taken into account.
+
+The method tenpy.ChargeInfo.shift_charges implements how the local charge
+changes when moved from one site to another. It takes an arbitrary translation vector as an
+argument. It is used, e.g., to create the tenpy.linalg.models.lattice.Lattice.mps_sites
+from the tenpy.linalg.models.lattice.Lattice.unit_cell of the lattice.
+It turns out that the MPS algorithms only need a specialized version,
+tenpy.ChargeInfo.shift_charges_horizontal, which restricts to translations that are purely
+along the first dimension of the lattice.
+
+In the setting of using MPS in algorithms, we want to be as agnostic of the lattice geometry as
+possible. It turns out that in the concrete algorithms, and only for infinite MPS, we only need
+to shift Arrays / sites / charged by whole MPS unit cells (of length tenpy.MPS.L).
+This is implemented in tenpy.MPS.shift_Array_unit_cell, etc., which uses the
+tenpy.networks.mps.MPSGeometry.unit_cell_width of the MPS, which is now also an attr of MPS.
+
+See also
+--------
+- The module tenpy.linalg.np_conserved should contain all the API needed from the point of view of the algorithms.
+  It contains the fundamental tenpy.linalg.np_conserved.Array class and functions for working with them (creating and manipulating).
+- The module tenpy.linalg.charges contains implementations for the charge structure, for example the classes
+  tenpy.linalg.charges.ChargeInfo, tenpy.linalg.charges.LegCharge, and tenpy.linalg.charges.LegPipe.
+  As noted above, the 'public' API is imported to (and accessible from) tenpy.linalg.np_conserved.
+
+A full example code for spin-1/2
+--------------------------------
+Below follows a full example demonstrating the creation and contraction of Arrays.
+(It's the file `a_np_conserved.py` in the examples folder of the tenpy source.)

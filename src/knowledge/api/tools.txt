@@ -1,0 +1,462 @@
+# Module: tenpy.tools.prediction
+
+def linear_prediction(x, axis=0, *args, **kwargs):
+    """Apply linear prediction to a multidimensional time series along an axis."""
+def simple_linear_prediction_1d(x: np.ndarray, rel_prediction_time: float=1, rel_num_points: float=0.3, truncation_mode: str='renormalize', rel_split: float=0):
+    """Linear prediction of a one-dimensional time series data."""
+def get_lpc(x, p):
+    """Obtain the linear prediction coefficients (lpc) from correlations."""
+def get_alpha_and_c(x, lpc, truncation_mode='cutoff', epsilon=1e-06):
+    """Get the eigenvalues and coefficients from a vector of linear prediction coefficients."""
+
+# Module: tenpy.tools.optimization
+
+
+class OptimizationFlag:
+    """Options for the global 'optimization level' used for dynamical optimizations."""
+    def from_bytes(cls, bytes, byteorder, signed=False):
+        """Like ``int.from_bytes``, which has a docstring which sphinx cant parse"""
+    def to_bytes(self, length=1, byteorder='big', signed=False):
+        """Like ``int.to_bytes``, which has a docstring which sphinx cant parse"""
+
+class temporary_level:
+    """Context manager to temporarily set the optimization level to a different value."""
+    def __init__(self, temporary_level): pass
+def to_OptimizationFlag(level):
+    """Convert strings and int to a valid OptimizationFlag."""
+def set_level(level=1):
+    """Set the global optimization level."""
+def get_level():
+    """Return the global optimization level."""
+def optimize(level_compare=OptimizationFlag.default):
+    """Called by algorithms to check whether it should (try to) do some optimizations."""
+def use_cython(func=None, replacement=None, check_doc=True):
+    """Decorator to replace a function with a Cython-equivalent from _npc_helper.pyx."""
+
+# Module: tenpy.tools.fit
+
+def alg_decay(x, a, b, c):
+    """Algebraic decay function :math :`a * x^{-b} + c`."""
+def linear_fit(x, y):
+    """Perform a linear fit `y` ~ `a * x + b`."""
+def lin_fit_res(x, y):
+    """Returns the least-square residue of a linear fit y vs x."""
+def alg_decay_fit_res(log_b, x, y):
+    """Returns the residue of an algebraic decay fit of the form ``x**(-np.exp(log_b))``."""
+def alg_decay_fit(x, y, npts=5, power_range=(0.01, 4.0), power_mesh=[60, 10]):
+    """Fit `y` to an algebraic decay of the form :math :`a * x^{-b} + c`."""
+def alg_decay_fits(x, ys, npts=5, power_range=(0.01, 4.0), power_mesh=[60, 10]):
+    """Batched version of :func:`~tenpy.tools.fit.alg_decay`."""
+def plot_alg_decay_fit(plot_module, x, y, fit_par, xfunc=None, kwargs={}, plot_fit_args={}):
+    """Utility function used the plot an algebraic fit function next to the data."""
+def fit_with_sum_of_exp(f, n, N=50):
+    """Approximate a decaying function `f` with a sum of exponentials."""
+def sum_of_exp(lambdas, prefactors, x):
+    """Evaluate ``sum_i prefactor[i] * lambda[i]**x`` for different `x`."""
+def entropy_profile_from_CFT(size_A, L, central_charge, const):
+    """Expected profile for the entanglement entropy at a critical point."""
+def central_charge_from_S_profile(psi, exclude=None):
+    """Fit the entanglement entropy of a finite MPS to the expected profile for critical models."""
+
+# Module: tenpy.tools.spectral_function_tools
+
+def spectral_function(time_dep_corr, lat, dt: float, gaussian_window: bool=False, sigma: float=0.4, linear_predict: bool=False, rel_prediction_time: float=1, rel_num_points: float=0.3, truncation_mode: str='renormalize', rel_split: float=0, axis_time: int=0, axis_space: int=1):
+    """Given a time dependent correlation function C(t, r), calculate its Spectral Function."""
+def fourier_transform_space(lat, a, axis=1): pass
+def fourier_transform_time(a, dt, axis=0): pass
+def apply_gaussian_windowing(a, sigma: float=0.4, axis=0):
+    """Simple gaussian windowing function along an axes."""
+def to_mps_geometry(lat, a):
+    """Bring measurement in lattice geometry to mps geometry."""
+def plot_correlations_on_lattice(ax, lat, correlations, pairs='nearest_neighbors', scale=1, color_pos='r', color_neg='g', color=None, zorder=0):
+    """Function to plot correlations on a lattice."""
+
+# Module: tenpy.tools.string
+
+def is_non_string_iterable(x):
+    """Check if x is a non-string iterable, (e.g., list, tuple, dictionary, np.ndarray)"""
+def vert_join(strlist, valign='t', halign='l', delim=' '):
+    """Join multiline strings vertically such that they appear next to each other."""
+def join_as_many_as_possible(msgs: Sequence[str], separator: str, priorities: Sequence[int]=None, max_len: int=None, fill: str='...'):
+    """Like ``separator.join(msgs)`` but truncated if the result is too long."""
+def to_mathematica_lists(a):
+    """Convert nested `a` to string readable by mathematica using curly brackets '{...}'."""
+def format_like_list(it):
+    """Format elements of an iterable as if it were a plain list."""
+
+# Module: tenpy.tools.math
+
+def matvec_to_array(H):
+    """Transform an linear operator with a `matvec` method into a dense numpy array."""
+def entropy(p, n=1):
+    """Calculate the entropy of a distribution."""
+def gcd(a, b):
+    """Computes the greatest common divisor (GCD) of two numbers."""
+def gcd_array(a):
+    """Return the greatest common divisor of all of entries in `a`"""
+def lcm(a, b):
+    """Returns the least common multiple (LCM) of two positive numbers."""
+def speigs(A, k, *args, **kwargs):
+    """Wrapper around :func:`scipy.sparse.linalg.eigs`, lifting the restriction ``k < rank(A)-1``."""
+def speigsh(A, k, *args, **kwargs):
+    """Wrapper around :func:`scipy.sparse.linalg.eigsh`, lifting the restriction ``k < rank(A)-1``."""
+def perm_sign(p):
+    """Given a permutation `p` of numbers, returns its sign. (+1 or -1)"""
+def qr_li(A, cutoff=1e-15):
+    """QR decomposition with cutoff to discard nearly linear dependent columns in `Q`."""
+def rq_li(A, cutoff=1e-15):
+    """RQ decomposition with cutoff to discard nearly linear dependent columns in `Q`."""
+
+# Module: tenpy.tools.docs
+
+def amend_parent_docstring(parent, insert_at: str='Parameters\n', insert_before: bool=True):
+    """Return a decorator that facilitates docstring generation."""
+
+# Module: tenpy.tools.misc
+
+def to_iterable(a):
+    """If `a` is a not iterable or a string, return ``[a]``, else return ``a``."""
+def to_iterable_of_len(a, L):
+    """If a is a non-string iterable of length `L`, return `a`, otherwise return [a]*L."""
+def to_array(a, shape=(None,), dtype=None, allow_incommensurate=False):
+    """Convert `a` to an numpy array and tile to matching dimension/shape."""
+def anynan(a):
+    """Check whether any entry of a ndarray `a` is 'NaN'."""
+def anynan(a):
+    """Check whether any entry of a ndarray `a` is 'NaN'."""
+def argsort(a, sort=None, **kwargs):
+    """Wrapper around np.argsort to allow sorting ascending/descending and by magnitude."""
+def lexsort(a, axis=-1):
+    """Wrapper around ``np.lexsort``: allow for trivial case ``a.shape[0] = 0`` without sorting"""
+def inverse_permutation(perm):
+    """Reverse sorting indices."""
+def list_to_dict_list(l):
+    """Given a list `l` of objects, construct a lookup table."""
+def atleast_2d_pad(a, pad_item=0):
+    """Transform `a` into a 2D array, filling missing places with `pad_item`."""
+def transpose_list_list(D, pad=None):
+    """Returns a list of lists T, such that ``T[i][j] = D[j][i]``."""
+def zero_if_close(a, tol=1e-15):
+    """Set real and/or imaginary part to 0 if their absolute value is smaller than `tol`."""
+def pad(a, w_l=0, v_l=0, w_r=0, v_r=0, axis=0):
+    """Pad an array along a given `axis`."""
+def add_with_None_0(a, b):
+    """Return ``a + b``, treating `None` as zero."""
+def group_by_degeneracy(E, subset=None, cutoff=1e-12, *args):
+    """Find groups of indices for which (energy) values are degenerate."""
+def get_close(values, target, default=None, eps=1e-13):
+    """Iterate through `values` and return first entry closer than `eps`."""
+def find_subclass(base_class, subclass_name):
+    """For a given base class, recursively find the subclass with the given name."""
+def get_recursive(nested_data, recursive_key, separator='.', default=_UNSET):
+    """Extract specific value from a nested data structure."""
+def set_recursive(nested_data, recursive_key, value, separator='.', insert_dicts=False):
+    """Same as :func:`get_recursive`, but set the data entry to `value`."""
+def update_recursive(nested_data, update_data, separator='.', insert_dicts=True):
+    """Wrapper around :func:`set_recursive` to allow updating multiple values at once."""
+def merge_recursive(conflict='error', path=None, *nested_data):
+    """Merge nested dictionaries `nested1` and `nested2`."""
+def flatten(mapping, separator='.'):
+    """Obtain a flat dictionary with all key/value pairs of a nested data structure."""
+def setup_logging(output_filename=None, filename=_not_set, to_stdout='INFO', to_file='INFO', format='%(levelname)-8s: %(message)s', datefmt=None, logger_levels={}, dict_config=None, capture_warnings=None, skip_setup=None):
+    """Configure the :mod:`logging` module."""
+def convert_memory_units(value, unit_from='bytes', unit_to=None):
+    """Convert between different memory units."""
+
+class TenpyInconsistencyError:
+    """Error class that is raised when a consistency check fails."""
+
+class TenpyInconsistencyWarning:
+    """Warning category that is emitted when a consistency check fails."""
+
+class BetaWarning:
+    """Warning category that we emit in new code that still needs to be tested better."""
+def consistency_check(value, options, threshold_key, threshold_default, msg, compare='<='):
+    """Perform a consistency check, raising an error if it is violated."""
+
+# Module: tenpy.tools.hdf5_io
+
+def parse_version(version_str): pass
+def save(data, filename, mode='w'):
+    """Save `data` to file with given `filename`."""
+def load(filename):
+    """Load data from file with given `filename`."""
+def find_global(module, qualified_name):
+    """Get the object of the `qualified_name` in a given python `module`."""
+def valid_hdf5_path_component(name):
+    """Determine if `name` is a valid HDF5 path component."""
+
+class Hdf5FormatError:
+    """Common base class for errors regarding our HDF5 format."""
+
+class Hdf5ExportError:
+    """This exception is raised when something went wrong during export to hdf5."""
+
+class Hdf5ImportError:
+    """This exception is raised when something went wrong during import from hdf5."""
+
+class Hdf5Exportable:
+    """Interface specification for a class to be exportable to our HDF5 format."""
+    def save_hdf5(self, hdf5_saver, h5gr, subpath):
+        """Export `self` into a HDF5 file."""
+    def from_hdf5(cls, hdf5_loader, h5gr, subpath):
+        """Load instance from a HDF5 file."""
+
+class Hdf5Ignored:
+    """Placeholder for a dataset/group to be ignored during both loading and saving."""
+    def __init__(self, name='unknown'): pass
+
+class Hdf5Saver:
+    """Class to save simple enough objects into a HDF5 file."""
+    def __init__(self, h5group, format_selection=None): pass
+    def save(self, obj, path='/'):
+        """Save `obj` in ``self.h5group[path]``."""
+    def create_group_for_obj(self, path, obj):
+        """Create an HDF5 group ``self.h5group[path]`` to store `obj`."""
+    def memorize_save(self, h5gr, obj):
+        """Store objects already saved in the :attr:`memo_save`."""
+    def save_reduce(self, func, args, state=None, listitems=None, dictitems=None, state_setter=None, obj=None, path=None):
+        """Save the return values of ``obj.__reduce__`` following the pickle protocol."""
+    def save_none(self, obj, path, type_repr):
+        """Save the None object as a string (dataset); in dispatch table."""
+    def save_dataset(self, obj, path, type_repr):
+        """Save `obj` as a hdf5 dataset; in dispatch table."""
+    def save_masked_array(self, obj, path, type_repr):
+        """Save a (numpy) masked array."""
+    def save_iterable(self, obj, path, type_repr):
+        """Save an iterable `obj` like a list, tuple or set; in dispatch table."""
+    def save_iterable_content(self, obj, h5gr, subpath):
+        """Save contents of an iterable `obj` in the existing `h5gr`."""
+    def save_dict(self, obj, path, type_repr):
+        """Save the dictionary `obj`; in dispatch table."""
+    def save_dict_content(self, obj, h5gr, subpath):
+        """Save contents of a dictionary `obj` in the existing `h5gr`."""
+    def save_range(self, obj, path, type_repr):
+        """Save a range object; in dispatch table."""
+    def save_dtype(self, obj, path, type_repr):
+        """Save a :class:`~numpy.dtype` object; in dispatch table."""
+    def save_ignored(self, obj, path, type_repr):
+        """Don't save the Hdf5Ignored object; just return None."""
+    def save_global(self, obj, path, type_repr):
+        """Save a global object like a function or class."""
+
+class Hdf5Loader:
+    """Class to load and import object from a HDF5 file."""
+    def __init__(self, h5group, ignore_unknown=True, exclude=None): pass
+    def load(self, path=None):
+        """Load a Python :class:`object` from the dataset."""
+    def memorize_load(self, h5gr, obj):
+        """Store objects already loaded in the :attr:`memo_load`."""
+    def get_all_hdf5_keys(self, h5_group=None):
+        """Recursively display all keys in the given h5_group."""
+    def get_attr(h5gr, attr_name):
+        """Return attribute ``h5gr.attrs[attr_name]``, if existent."""
+    def load_none(self, h5gr, type_info, subpath):
+        """Load the ``None`` object from a dataset."""
+    def load_dataset(self, h5gr, type_info, subpath):
+        """Load a h5py :class:`Dataset` and convert it into the desired type."""
+    def load_str(self, h5gr, type_info, subpath):
+        """Load a string from a h5py :class:`Dataset`."""
+    def load_converted_to_str(self, h5gr, type_info, subpath):
+        """Load objects converted to string during save, in particular int > 2^64."""
+    def load_masked_array(self, h5gr, type_info, subpath):
+        """Load a masked array."""
+    def load_list(self, h5gr, type_info, subpath):
+        """Load a list."""
+    def load_set(self, h5gr, type_info, subpath):
+        """Load a set."""
+    def load_tuple(self, h5gr, type_info, subpath):
+        """Load a tuple."""
+    def load_dict(self, h5gr, type_info, subpath):
+        """Load a dictionary in the format according to `type_info`."""
+    def load_general_dict(self, h5gr, type_info, subpath):
+        """Load a dictionary with general keys."""
+    def load_simple_dict(self, h5gr, type_info, subpath):
+        """Load a dictionary with simple keys."""
+    def load_range(self, h5gr, type_info, subpath):
+        """Load a range."""
+    def load_dtype(self, h5gr, type_info, subpath):
+        """Load a :class:`numpy.dtype`."""
+    def load_hdf5exportable(self, h5gr, type_info, subpath):
+        """Load an instance of a userdefined class."""
+    def load_ignored(self, h5gr, type_info, subpath):
+        """Ignore the group to be loaded."""
+    def load_global(self, h5gr, type_info, subpath):
+        """Load a global object like a class or function from its qualified name and module."""
+    def load_reduce(self, h5gr, type_info, subpath):
+        """Load an object where the return values of  ``obj.__reduce__`` has been exported."""
+def save_to_hdf5(h5group, obj, path='/'):
+    """Save an object `obj` into a hdf5 file or group."""
+def load_from_hdf5(h5group, path=None, ignore_unknown=True, exclude=None):
+    """Load an object from hdf5 file or group."""
+
+# Module: tenpy.tools.params
+
+
+class Config:
+    """Dict-like wrapper class for parameter/configuration dictionaries."""
+    def __init__(self, config, name): pass
+    def copy(self, share_unused=True):
+        """Make a *shallow* copy, as for a dictionary."""
+    def as_dict(self):
+        """Return a copy of the options as a dictionary."""
+    def save_yaml(self, filename):
+        """Save the parameters to `filename` as a YAML file."""
+    def from_yaml(cls, filename, name=None):
+        """Load a `Config` instance from a YAML file containing the :attr:`options`."""
+    def save_hdf5(self, hdf5_saver, h5gr, subpath):
+        """Export `self` into a HDF5 file."""
+    def from_hdf5(cls, hdf5_loader, h5gr, subpath):
+        """Load instance from a HDF5 file."""
+    def warn_unused(self, recursive=False):
+        """Warn about (so far) unused options."""
+    def keys(self): pass
+    def get(self, key, default, expect_type=None):
+        """Find the value of `key`; really more like `setdefault` of a :class:`dict`."""
+    def silent_get(self, key, default):
+        """Find the value of `key`, but don't set as default value and don't print."""
+    def setdefault(self, key, default):
+        """Set a default value without reading it out."""
+    def subconfig(self, key, default=None):
+        """Get ``self[key]`` as a :class:`Config`."""
+    def touch(self, *keys):
+        """Mark `keys` as read out to suppress warnings about those keys being unused."""
+    def log(self, option, action='Option', use_default=False):
+        """Print out `option` if verbosity and other conditions are met."""
+    def deprecated_alias(self, old_key, new_key, extra_msg=''): pass
+    def deprecated_ignore(self, extra_msg='', *old_keys):
+        """Issue a warning if an old, deprecated key is encountered that will be ignored."""
+    def any_nonzero(self, keys, log_msg=None):
+        """Check for any non-zero or non-equal entries in some parameters."""
+    def has_nonzero(self, key):
+        """Check whether `self` contains `key`, and if `self[key]` is nontrivial."""
+def asConfig(config, name):
+    """Convert a dict-like `config` to a :class:`Config`."""
+def load_yaml_with_py_eval(filename=None, yaml_content=None, context={'np': numpy}):
+    """Load a yaml file with support for an additional `!py_eval` tag."""
+
+# Module: tenpy.tools.cache
+
+
+class DictCache:
+    """Cache with dict-like interface."""
+    def __init__(self, storage): pass
+    def trivial(cls):
+        """Create a trivial storage that keeps everything in RAM."""
+    def create_subcache(self, name):
+        """Create another :class:`DictCache` based on the same storage resource."""
+    def get(self, key, default=None):
+        """Same as ``self[key]``, but return `default` if `key` is not in `self`."""
+    def set_short_term_keys(self, *keys):
+        """Set keys for data which should be kept in RAM for a while."""
+    def preload(self, raise_missing=False, *keys):
+        """Pre-load the data for one or more keys from disk to RAM."""
+
+class CacheFile:
+    """Subclass of :class:`DictCache` to handle opening and closing resources."""
+    def open(cls, storage_class='Storage', use_threading=False, delete=True, max_queue_size=2, **storage_kwargs):
+        """Interface for opening a :class:`Storage` and creating a :class:`DictCache` from it."""
+    def close(self):
+        """Close the associated storage container and shut down."""
+
+class Storage:
+    """A container interface for saving data to disk."""
+    def __init__(self): pass
+    def open(cls, delete=None): pass
+    def close(self):
+        """Close opened files, free memory and clean up temporary files/directories."""
+    def subcontainer(self, name):
+        """Create another instance of the same class saving in a subdirectory/subgroup."""
+    def load(self, key):
+        """Interface for loading data from disk in subclasses."""
+    def save(self, key, val):
+        """Interface for saving data to disk in subclasses."""
+    def delete(self, key):
+        """Interface for cleaning up a previously saved data from disk in subclasses."""
+    def preload(self, key):
+        """Interface for preloading data into the given dictionary `into`."""
+
+class PickleStorage:
+    """Subclass of :class:`Storage` which saves long-term data on disk with :mod:`pickle`."""
+    def __init__(self, directory): pass
+    def open(cls, directory=None, tmpdir=None, delete=True):
+        """Create a directory and use it to initialize a :class:`PickleCache`."""
+    def close(self): pass
+    def subcontainer(self, name): pass
+    def load(self, key): pass
+    def save(self, key, value): pass
+    def delete(self, key): pass
+
+class Hdf5Storage:
+    """Subclass of :class:`Storage` which saves long-term data on disk with :mod:`h5py`."""
+    def __init__(self, h5group): pass
+    def open(cls, filename=None, subgroup=None, mode='w-', delete=True, tmpdir=None):
+        """Create an hdf5 file and use it to initialize an :class:`Hdf5Cache`."""
+    def close(self): pass
+    def subcontainer(self, name): pass
+    def load(self, key): pass
+    def save(self, key, value): pass
+    def delete(self, key): pass
+
+class ThreadedStorage:
+    """Wrapper around a :class:`Storage` (or subclass) with thread-parallelization."""
+    def __init__(self, worker, disk_storage): pass
+    def open(cls, disk_storage, max_queue_size=2):
+        """Setup and start a :class:`Worker` subthread."""
+    def close(self): pass
+    def subcontainer(self, name): pass
+    def load(self, key): pass
+    def preload(self, key): pass
+    def save(self, key, value): pass
+    def delete(self, key): pass
+
+# Module: tenpy.tools.thread
+
+
+class WorkerDied:
+    """Exception thrown if the main thread detects that the worker subthread died."""
+
+class Worker:
+    """Manager for a worker thread."""
+    def __init__(self, name='tenpy worker', max_queue_size=0, daemon=None): pass
+    def run(self):
+        """Main function for worker thread."""
+    def put_task(self, fct, return_dict=None, return_key=None, *args, **kwargs):
+        """Add a task to be done by the worker."""
+    def join_tasks(self):
+        """Block until all worker tasks are finished."""
+
+# Module: tenpy.tools.events
+
+
+class EventHandler:
+    """Handler for an event represented by an instance of this class."""
+    def __init__(self, arg_descr=None): pass
+    def copy(self):
+        """Make a (shallow) copy."""
+    def id_of_last_connected(self): pass
+    def connect(self, callback=None, priority=0, extra_kwargs=None):
+        """Register a `callback` function as a listener to the event."""
+    def connect_by_name(self, module_name, func_name, extra_kwargs=None, priority=0):
+        """Connect to a function given by the name in a module, optionally inserting arguments."""
+    def disconnect(self, listener_id):
+        """De-register a listener."""
+    def emit(self, *args, **kwargs):
+        """Call the `callback` functions of all listeners."""
+    def emit_until_result(self, *args, **kwargs):
+        """Call the listeners `callback` until one returns not `None`."""
+
+# Module: tenpy.tools.process
+
+def memory_usage():
+    """Return memory usage of the running python process."""
+def load_omp_library(libs=['libiomp5.so', find_library('libiomp5md'), find_library('gomp')], verbose=True):
+    """Tries to load openMP library."""
+def omp_get_nthreads():
+    """Wrapper around OpenMP ``get_max_threads``."""
+def omp_set_nthreads(n):
+    """Wrapper around OpenMP ``set_nthreads``."""
+def mkl_get_nthreads():
+    """Wrapper around MKL ``get_max_threads``."""
+def mkl_set_nthreads(n):
+    """Wrapper around MKL ``set_num_threads``."""

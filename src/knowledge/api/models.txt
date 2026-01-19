@@ -1,0 +1,556 @@
+# Module: tenpy.models.xxz_chain
+
+
+class XXZChain:
+    """Spin-1/2 XXZ chain with Sz conservation."""
+    def __init__(self, model_params): pass
+
+class XXZChain2:
+    """Another implementation of the Spin-1/2 XXZ chain with Sz conservation."""
+    def init_sites(self, model_params): pass
+    def init_terms(self, model_params): pass
+
+# Module: tenpy.models.toric_code
+
+
+class DualSquare:
+    """The dual lattice of the square lattice (again square)."""
+    def __init__(self, Lx, Ly, sites, **kwargs): pass
+    def ordering(self, order):
+        """Provide possible orderings of the `N` lattice sites."""
+
+class ToricCode:
+    """Toric code model."""
+    def init_sites(self, model_params): pass
+    def init_terms(self, model_params): pass
+
+# Module: tenpy.models.mixed_xk
+
+
+class MixedXKLattice:
+    """Lattice for fermions with mixed real and momentum space on a cylinder."""
+    def __init__(self, N_rings, Ly, N_orb, sites, ring_order=None, orbital_names=None, orbital_values=None, **kwargs): pass
+    def from_charges_of_orbitals(cls, N_rings, Ly, N_orb, chinfo, charges, conserve_k=True, ring_order=None, **kwargs):
+        """Initialize from charges, defining default Sites."""
+    def save_hdf5(self, hdf5_saver, h5gr, subpath):
+        """Export `self` into a HDF5 file."""
+    def from_hdf5(cls, hdf5_loader, h5gr, subpath):
+        """Load instance from a HDF5 file."""
+    def get_u(self, k, l):
+        """Return unit cell index `u` as a function of momentum index `k` and orbital `l`."""
+    def get_k(self, u):
+        """Return momentum index `k` for given unit cell index `u`."""
+    def get_l(self, u):
+        """Return orbital index `l` for given unit cell index `u`."""
+    def get_exp_ik(self, ky):
+        """Return :math:`\exp(\frac{2 pi i }{L_y} ky)`."""
+    def mps2lat_values_k(self, A, axes=0):
+        """Like :meth:`Lattice.mps2lat_values`, but introduce `k` as separate lattice index."""
+    def mps2lat_values_masked_k(self, A, axes=-1, mps_inds=None, include_u=None):
+        """Like :meth:`mps2lat_values_masked`, but introduce `k` as separate lattice index."""
+
+class MixedXKModel:
+    """Base class for a Hamiltonian represented in mixed x-k-space on a cylinder."""
+    def init_lattice(self, model_params, N_orb, chinfo, charges):
+        """Initialize a MixedXKLattice for the given model parameters."""
+    def add_intra_ring_hopping(self, couplings):
+        """Add hopping terms within each ring."""
+    def add_inter_ring_hopping(self, couplings, dx=+1):
+        """Add hopping terms between different rings."""
+    def add_intra_ring_interaction(self, couplings, operators=('Cd', 'C', 'Cd', 'C')):
+        """Add intra-ring interaction terms."""
+    def add_inter_ring_interaction(self, couplings, dx, operators=('Cd', 'C', 'Cd', 'C')):
+        """Add inter-ring interaction terms."""
+    def real_to_mixed_onsite(self, A, A_coord):
+        """Terms to be measured in x-k space for real space onsite observables."""
+    def real_to_mixed_two_site(self, A, A_coord, B, B_coord):
+        """Terms to be measured in x-k-space for real space correlation functions."""
+    def real_to_mixed_n_site(self, orbital_coeffs, rs_coords):
+        """Terms to be measured in x-k-space for real space correlation functions."""
+    def real_to_mixed_correlations_any(self, ops, coeff_orbitals, rs_coords):
+        """Terms to be measured in x-k-space for real space correlation functions."""
+
+class SpinlessMixedXKSquare:
+    """Spin-less fermionic Hubbard model on a square lattice in x-k-basis."""
+    def init_lattice(self, model_params): pass
+    def init_terms(self, model_params): pass
+
+class HubbardMixedXKSquare:
+    """Example: Spin-full Hubbard model on a square lattice in x-k-Basis."""
+    def init_lattice(self, model_params): pass
+    def init_terms(self, model_params): pass
+
+# Module: tenpy.models.fermions_spinless
+
+
+class FermionModel:
+    """Spinless fermions with particle number conservation."""
+    def init_sites(self, model_params): pass
+    def init_terms(self, model_params): pass
+
+class FermionChain:
+    """The :class:`FermionModel` on a Chain, suitable for TEBD."""
+
+# Module: tenpy.models.tj_model
+
+
+class tJModel:
+    """Spin-1/2 t-J model."""
+    def init_sites(self, model_params): pass
+    def init_terms(self, model_params): pass
+
+class tJChain:
+    """The :class:`tJModel` on a Chain, suitable for TEBD."""
+
+# Module: tenpy.models.hubbard
+
+
+class BoseHubbardModel:
+    """Spinless Bose-Hubbard model."""
+    def init_sites(self, model_params): pass
+    def init_terms(self, model_params): pass
+
+class BoseHubbardChain:
+    """The :class:`BoseHubbardModel` on a Chain, suitable for TEBD."""
+    def __init__(self, model_params): pass
+    def estimate_RAM_saving_factor(self):
+        """Returns the expected saving factor for RAM based on charge conservation."""
+
+class FermiHubbardModel:
+    """Spin-1/2 Fermi-Hubbard model."""
+    def init_sites(self, model_params): pass
+    def init_terms(self, model_params): pass
+
+class FermiHubbardChain:
+    """The :class:`FermiHubbardModel` on a Chain, suitable for TEBD."""
+
+class FermiHubbardModel2:
+    """Another implementation of the :class:`FermiHubbardModel`, but with local dimension 2."""
+    def init_sites(self, model_params): pass
+    def init_terms(self, model_params): pass
+
+class DipolarBoseHubbardChain:
+    """Dipole-conserving spinless Bose-Hubbard model."""
+    def init_lattice(self, model_params):
+        """Initialize a 1D lattice"""
+    def init_terms(self, model_params):
+        """Add the onsite and coupling terms to the model"""
+
+# Module: tenpy.models.tf_ising
+
+
+class TFIModel:
+    """Transverse field Ising model on a general lattice."""
+    def init_sites(self, model_params): pass
+    def init_terms(self, model_params): pass
+
+class TFIChain:
+    """The :class:`TFIModel` on a Chain, suitable for TEBD."""
+
+# Module: tenpy.models.model
+
+
+class Model:
+    """Base class for all models."""
+    def __init__(self, lattice): pass
+    def rng(self):
+        """Reproducible numpy pseudo random number generator."""
+    def copy(self):
+        """Shallow copy of self."""
+    def save_hdf5(self, hdf5_saver, h5gr, subpath):
+        """Export `self` into a HDF5 file."""
+    def from_hdf5(cls, hdf5_loader, h5gr, subpath):
+        """Load instance from a HDF5 file."""
+    def extract_segment(self, first=0, last=None, enlarge=None):
+        """Return a (shallow) copy with extracted segment of MPS."""
+    def enlarge_mps_unit_cell(self, factor=2):
+        """Repeat the unit cell for infinite MPS boundary conditions; in place."""
+    def group_sites(self, n=2, grouped_sites=None):
+        """Modify `self` in place to group sites."""
+    def get_extra_default_measurements(self):
+        """Get list of model-dependent extra default measurements."""
+    def update_time_parameter(self, new_time):
+        """Reconstruct Hamiltonian for time-dependent models, potentially (!) in-place."""
+    def estimate_RAM_saving_factor(self):
+        """Returns the expected saving factor for RAM based on charge conservation."""
+
+class NearestNeighborModel:
+    """Base class for a model of nearest neighbor interactions w.r.t. the MPS index."""
+    def __init__(self, lattice, H_bond): pass
+    def from_MPOModel(cls, mpo_model):
+        """Initialize a NearestNeighborModel from a model class defining an MPO."""
+    def test_sanity(self): pass
+    def trivial_like_NNModel(self):
+        """Return a NearestNeighborModel with same lattice, but trivial (H=0) bonds."""
+    def bond_energies(self, psi):
+        """Calculate bond energies <psi|H_bond|psi>."""
+    def extract_segment(self, *args, **kwargs): pass
+    def enlarge_mps_unit_cell(self, factor=2):
+        """Repeat the unit cell for infinite MPS boundary conditions; in place."""
+    def group_sites(self, n=2, grouped_sites=None):
+        """Modify `self` in place to group sites."""
+    def calc_H_MPO_from_bond(self, tol_zero=1e-15):
+        """Calculate the MPO Hamiltonian from the bond Hamiltonian."""
+    def get_extra_default_measurements(self): pass
+
+class MPOModel:
+    """Base class for a model with an MPO representation of the Hamiltonian."""
+    def __init__(self, lattice, H_MPO): pass
+    def copy(self): pass
+    def test_sanity(self): pass
+    def extract_segment(self, *args, **kwargs): pass
+    def enlarge_mps_unit_cell(self, factor=2):
+        """Repeat the unit cell for infinite MPS boundary conditions; in place."""
+    def group_sites(self, n=2, grouped_sites=None):
+        """Modify `self` in place to group sites."""
+    def calc_H_bond_from_MPO(self, tol_zero=1e-15):
+        """Calculate the bond Hamiltonian from the MPO Hamiltonian."""
+    def get_extra_default_measurements(self): pass
+
+class CouplingModel:
+    """Base class for a general model of a Hamiltonian consisting of two-site couplings."""
+    def __init__(self, lattice, explicit_plus_hc=False): pass
+    def test_sanity(self):
+        """Sanity check, raises ValueErrors, if something is wrong."""
+    def add_local_term(self, strength, term, category=None, plus_hc=False):
+        """Add a single term to `self`."""
+    def add_onsite(self, strength, u, opname, category=None, plus_hc=False):
+        """Add onsite terms to :attr:`onsite_terms`."""
+    def add_onsite_term(self, strength, i, op, category=None, plus_hc=False):
+        """Add an onsite term on a given MPS site."""
+    def all_onsite_terms(self):
+        """Sum of all :attr:`onsite_terms`."""
+    def add_coupling(self, strength, u1, op1, u2, op2, dx, op_string=None, category=None, plus_hc=False):
+        """Add two-site coupling terms to the Hamiltonian, summing over lattice sites."""
+    def add_coupling_term(self, strength, i, j, op_i, op_j, op_string='Id', category=None, plus_hc=False):
+        """Add a two-site coupling term on given MPS sites."""
+    def all_coupling_terms(self):
+        """Sum of all :attr:`coupling_terms`."""
+    def add_multi_coupling(self, strength, ops, op_string=None, category=None, plus_hc=False, switchLR='middle_i'):
+        """Add multi-site coupling terms to the Hamiltonian, summing over lattice sites."""
+    def add_multi_coupling_term(self, strength, ijkl, ops_ijkl, op_string, category=None, plus_hc=False, switchLR='middle_i'):
+        """Add a general M-site coupling term on given MPS sites."""
+    def add_exponentially_decaying_coupling(self, strength, lambda_, op_i, op_j, subsites=None, subsites_start=None, op_string=None, plus_hc=False):
+        """Add an exponentially decaying long-range coupling."""
+    def add_exponentially_decaying_centered_terms(self, strength, lambda_, op_i, op_j, i, subsites=None, op_string=None, plus_hc=False):
+        """Add exponentially decaying terms centered around a single site. Only for finite systems."""
+    def calc_H_bond(self, tol_zero=1e-15):
+        """Calculate `H_bond` from :attr:`coupling_terms` and :attr:`onsite_terms`."""
+    def calc_H_MPO(self, tol_zero=1e-15):
+        """Calculate MPO representation of the Hamiltonian."""
+    def coupling_strength_add_ext_flux(self, strength, dx, phase):
+        """Add an external flux to the coupling strength."""
+
+class CouplingMPOModel:
+    """Combination of the :class:`CouplingModel` and :class:`MPOModel`."""
+    def __init__(self, model_params): pass
+    def init_H_from_terms(self):
+        """Initialize `H_MPO` (and `H_bond`) from the terms of the `CouplingModel`."""
+    def init_lattice(self, model_params):
+        """Initialize a lattice for the given model parameters."""
+    def init_sites(self, model_params):
+        """Define the local Hilbert space and operators; needs to be implemented in subclasses."""
+    def init_terms(self, model_params):
+        """Add the onsite and coupling terms to the model; subclasses should implement this."""
+
+# Module: tenpy.models.hofstadter
+
+def hopping_phases(p: int, q: int, Lx: int, Ly: int, pbc_x: bool, pbc_y: bool, gauge):
+    """Calculate the complex hopping phases for Hofstadter models."""
+
+class HofstadterFermions:
+    """Fermions on a square lattice with uniform magnetic flux."""
+    def init_sites(self, model_params): pass
+    def init_terms(self, model_params): pass
+
+class HofstadterBosons:
+    """Bosons on a square lattice with uniform magnetic flux."""
+    def init_sites(self, model_params): pass
+    def init_terms(self, model_params): pass
+def gauge_hopping(*a, **kw): pass
+
+# Module: tenpy.models.pxp
+
+
+class PXPChain:
+    """The PXP model as (approximately) implemented by a chain of Rydberg-blockaded atoms."""
+    def init_sites(self, model_params): pass
+    def init_terms(self, model_params): pass
+
+# Module: tenpy.models.clock
+
+
+class ClockModel:
+    """q-state Quantum clock model on a general lattice"""
+    def init_sites(self, model_params): pass
+    def init_terms(self, model_params): pass
+
+class ClockChain:
+    """The :class:`ClockModel` on a Chain, suitable for TEBD."""
+
+# Module: tenpy.models.aklt
+
+
+class AKLTChain:
+    """A simple implementation of the AKLT model."""
+    def __init__(self, model_params): pass
+    def psi_AKLT(self):
+        """Initialize the chi=2 MPS which is exact ground state of the AKLT model."""
+
+# Module: tenpy.models.molecular
+
+
+class MolecularModel:
+    """Spin-1/2 fermion molecular Hamiltonian."""
+    def __init__(self, params: dict): pass
+    def init_sites(self, params: Config):
+        """Initialize sites."""
+    def init_lattice(self, params: Config):
+        """Initialize lattice."""
+    def init_terms(self, params: Config):
+        """Initialize terms."""
+
+# Module: tenpy.models.lattice
+
+
+class Lattice:
+    """A general, regular lattice."""
+    def __init__(self, Ls, unit_cell, order='default', bc='open', bc_MPS='finite', basis=None, positions=None, pairs=None): pass
+    def test_sanity(self):
+        """Sanity check."""
+    def unit_cell(self): pass
+    def unit_cell(self, value): pass
+    def from_model_params(cls, model_params, sites):
+        """Initialize by reading sizes, boundary conditions etc from `model_params`."""
+    def copy(self):
+        """Shallow copy of `self`."""
+    def save_hdf5(self, hdf5_saver, h5gr, subpath):
+        """Export `self` into a HDF5 file."""
+    def from_hdf5(cls, hdf5_loader, h5gr, subpath):
+        """Load instance from a HDF5 file."""
+    def basis(self): pass
+    def basis(self, new_basis): pass
+    def dim(self):
+        """The dimension of the lattice."""
+    def order(self):
+        """Defines an ordering of the lattice sites, thus mapping the lattice to a 1D chain."""
+    def order(self, order_): pass
+    def ordering(self, order):
+        """Provide possible orderings of the `N` lattice sites."""
+    def boundary_conditions(self):
+        """Human-readable list of boundary conditions from :attr:`bc` and :attr:`bc_shift`."""
+    def boundary_conditions(self, bc): pass
+    def cylinder_axis(self):
+        """Direction of the cylinder axis."""
+    def extract_segment(self, first=0, last=None, enlarge=None):
+        """Extract a finite segment from an infinite/large system."""
+    def enlarge_mps_unit_cell(self, factor=2):
+        """Repeat the unit cell for infinite MPS boundary conditions; in place."""
+    def position(self, lat_idx):
+        """Return 'space' position of one or multiple sites."""
+    def site(self, i):
+        """Return :class:`~tenpy.networks.site.Site` instance corresponding to an MPS index `i`"""
+    def mps_sites(self):
+        """Return a list of sites for all MPS indices."""
+    def mps2lat_idx(self, i):
+        """Translate MPS index `i` to lattice indices ``(x_0, ..., x_{dim-1}, u)``."""
+    def lat2mps_idx(self, lat_idx):
+        """Translate lattice indices ``(x_0, ..., x_{D-1}, u)`` to MPS index `i`."""
+    def mps_idx_fix_u(self, u=None):
+        """Return an index array of MPS indices for which the site within the unit cell is `u`."""
+    def mps_lat_idx_fix_u(self, u=None):
+        """Similar as :meth:`mps_idx_fix_u`, but return also the corresponding lattice indices."""
+    def mps2lat_values(self, A, axes=0, u=None):
+        """Reshape/reorder `A` to replace an MPS index by lattice indices."""
+    def mps2lat_values_masked(self, A, axes=-1, mps_inds=None, include_u=None):
+        """Reshape/reorder an array `A` to replace an MPS index by lattice indices."""
+    def count_neighbors(self, u=0, key='nearest_neighbors'):
+        """Count e.g. the number of nearest neighbors for a site in the bulk."""
+    def distance(self, u1, u2, dx):
+        """Get the distance for a given coupling between two sites in the lattice."""
+    def find_coupling_pairs(self, max_dx=3, cutoff=None, eps=1e-10):
+        """Automatically find coupling pairs grouped by distances."""
+    def coupling_shape(self, dx):
+        """Calculate correct shape of the `strengths` for a coupling."""
+    def possible_couplings(self, u1, u2, dx, strength=None):
+        """Find possible MPS indices for two-site couplings."""
+    def multi_coupling_shape(self, dx):
+        """Calculate correct shape of the `strengths` for a multi_coupling."""
+    def possible_multi_couplings(self, ops, strength=None):
+        """Generalization of :meth:`possible_couplings` to couplings with more than 2 sites."""
+    def plot_sites(self, ax, markers=['o', '^', 's', 'p', 'h', 'D'], labels=None, **kwargs):
+        """Plot the sites of the lattice with markers."""
+    def plot_order(self, ax, order=None, textkwargs={}, **kwargs):
+        """Plot a line connecting sites in the specified "order" and text labels enumerating them."""
+    def plot_coupling(self, ax, coupling=None, wrap=False, **kwargs):
+        """Plot lines connecting nearest neighbors of the lattice."""
+    def plot_basis(self, ax, origin=(0.0, 0.0), shade=None, **kwargs):
+        """Plot arrows indicating the basis vectors of the lattice."""
+    def plot_reciprocal_basis(self, ax, origin=(0.0, 0.0), plot_symmetric=True, **kwargs):
+        """Plot arrows indicating the basis vectors of the reciprocal lattice."""
+    def plot_bc_identified(self, ax, direction=-1, origin=None, cylinder_axis=False, **kwargs):
+        """Mark two sites identified by periodic boundary conditions."""
+    def plot_brillouin_zone(self, ax, *args, **kwargs):
+        """Plot the Brillouin Zone of the lattice."""
+    def reciprocal_basis(self):
+        """Reciprocal basis vectors of the lattice."""
+    def BZ(self):
+        """The Brillouin Zone as :class:`SimpleBZ`"""
+    def with_grouped_sites(self, grouped_sites):
+        """Return a lattice with sites given by `grouped_sites`."""
+
+class TrivialLattice:
+    """Trivial lattice consisting of a single (possibly large) unit cell in 1D."""
+    def __init__(self, mps_sites, **kwargs): pass
+
+class SimpleLattice:
+    """A lattice with a unit cell consisting of just a single site."""
+    def __init__(self, Ls, site, **kwargs): pass
+    def mps2lat_values(self, A, axes=0, u=None):
+        """Same as :meth:`Lattice.mps2lat_values`, but ignore ``u``, setting it to ``0``."""
+
+class MultiSpeciesLattice:
+    """A variant of a :class:`SimpleLattice` replacing the elementary site with a set of sites."""
+    def __init__(self, simple_lattice, species_sites, species_names=None): pass
+    def ordering(self, order):
+        """Define orderings as for the `simple_lattice` with priority for within the unit cell."""
+    def self_u_to_simple_u(self, self_u):
+        """Get index `u` of the `simple_lattice` from index `u` in `self`."""
+    def self_u_to_species_idx(self, self_u):
+        """Get species index for unit cell index."""
+    def simple_u_to_species_u(self, simple_u, species_idx):
+        """Get index `u` in `self` from the `u` in the `simple_lattice` and the species index."""
+
+class IrregularLattice:
+    """A variant of a regular lattice, where we might have extra sites or sites missing."""
+    def __init__(self, regular_lattice, remove=None, add=None, add_unit_cell=[], add_positions=None): pass
+    def save_hdf5(self, hdf5_saver, h5gr, subpath): pass
+    def from_hdf5(cls, hdf5_loader, h5gr, subpath): pass
+    def ordering(self, order):
+        """Provide possible orderings of the lattice sites."""
+    def order(self, order_): pass
+    def mps_idx_fix_u(self, u=None): pass
+
+class HelicalLattice:
+    """Translation invariant version of a tilted, regular 2D lattice."""
+    def __init__(self, regular_lattice, N_unit_cells): pass
+    def save_hdf5(self, hdf5_saver, h5gr, subpath): pass
+    def from_hdf5(cls, hdf5_loader, h5gr, subpath): pass
+    def ordering(self, order):
+        """Provide possible orderings of the lattice sites."""
+    def order(self, order_): pass
+    def mps2lat_idx(self, i): pass
+    def lat2mps_idx(self, lat_idx): pass
+    def mps2lat_values(self, *args, **kwargs):
+        """Not implemented, use :meth:`mps2lat_values_masked` instead."""
+    def mps2lat_values_masked(self, *args, **kwargs): pass
+    def enlarge_mps_unit_cell(self, factor=2):
+        """Repeat the unit cell for infinite MPS boundary conditions; in place."""
+    def possible_couplings(self, u1, u2, dx, strength=None): pass
+    def possible_multi_couplings(self, ops, strength=None): pass
+    def plot_coupling(self, ax, coupling=None, wrap=True, **kwargs): pass
+
+class Chain:
+    """A chain of L equal sites."""
+    def __init__(self, L, site, **kwargs): pass
+    def ordering(self, order):
+        """Provide possible orderings of the `N` lattice sites."""
+
+class Ladder:
+    """A ladder coupling two chains."""
+    def __init__(self, L, sites, **kwargs): pass
+    def ordering(self, order):
+        """Provide possible orderings of the `N` lattice sites."""
+
+class NLegLadder:
+    """A ladder coupling N chains."""
+    def __init__(self, L, N, sites, **kwargs): pass
+    def from_model_params(cls, model_params, sites):
+        """Initialize by reading sizes, boundary conditions etc from `model_params`."""
+    def ordering(self, order):
+        """Provide possible orderings of the `N` lattice sites."""
+
+class Square:
+    """A square lattice."""
+    def __init__(self, Lx, Ly, site, **kwargs): pass
+
+class Triangular:
+    """A triangular lattice."""
+    def __init__(self, Lx, Ly, site, **kwargs): pass
+
+class Honeycomb:
+    """A honeycomb lattice."""
+    def __init__(self, Lx, Ly, sites, **kwargs): pass
+    def ordering(self, order):
+        """Provide possible orderings of the `N` lattice sites."""
+
+class Kagome:
+    """A Kagome lattice."""
+    def __init__(self, Lx, Ly, sites, **kwargs): pass
+    def ordering(self, order):
+        """Provide possible orderings of the `N` lattice sites."""
+
+class SimpleBZ:
+    """Helper class to provide an interface for the Brillouin Zone of a given lattice."""
+    def __init__(self, vertices, basis, dim: int): pass
+    def order_vertices(self, vertices): pass
+    def from_recip_basis_vectors(cls, basis_vectors, dim): pass
+    def area(self): pass
+    def contains_points(self, points):
+        """Checks whether given points lie inside the 1st Brillouin Zone."""
+    def reduce_points(self, points):
+        """Bring a set of points into 1st Brillouin Zone."""
+    def plot_brillouin_zone(self, *args, **kwargs):
+        """Plot the brillouin zone of the lattice."""
+    def lagrange_lattice_reduction(basis):
+        """Short implementation of Lagrange's algorithm for 2D lattice reduction."""
+def get_lattice(lattice_name):
+    """Given the name of a :class:`Lattice` class, get the lattice class itself."""
+def get_order(shape, snake_winding, priority=None):
+    """Built the :attr:`Lattice.order` in (Snake-) C-Style for a given lattice shape."""
+def get_order_grouped(shape, groups, priority=None):
+    """Variant of :func:`get_order`, grouping some sites of the unit cell."""
+
+# Module: tenpy.models.spins
+
+
+class SpinModel:
+    """Spin-S sites coupled by nearest neighbor interactions."""
+    def init_sites(self, model_params): pass
+    def init_terms(self, model_params): pass
+
+class SpinChain:
+    """The :class:`SpinModel` on a Chain, suitable for TEBD."""
+
+class DipolarSpinChain:
+    """Dipole conserving H3-H4 spin-S chain."""
+    def init_lattice(self, model_params):
+        """Initialize a 1D lattice"""
+    def init_terms(self, model_params):
+        """Add the onsite and coupling terms to the model"""
+
+# Module: tenpy.models.haldane
+
+
+class BosonicHaldaneModel:
+    """Hardcore bosonic Haldane model."""
+    def init_sites(self, model_params): pass
+    def init_terms(self, model_params): pass
+
+class FermionicHaldaneModel:
+    """Spinless fermionic Haldane model."""
+    def init_sites(self, model_params): pass
+    def init_terms(self, model_params): pass
+
+# Module: tenpy.models.spins_nnn
+
+
+class SpinChainNNN:
+    """Spin-S sites coupled by (next-)nearest neighbor interactions on a `GroupedSite`."""
+    def init_sites(self, model_params): pass
+    def init_terms(self, model_params): pass
+
+class SpinChainNNN2:
+    """Spin-S sites coupled by next-nearest neighbor interactions."""
+    def init_sites(self, model_params): pass
+    def init_terms(self, model_params): pass

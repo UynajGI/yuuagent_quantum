@@ -1,0 +1,735 @@
+# Module: tenpy.networks.mpo
+
+
+class MPO:
+    """Matrix product operator, finite (MPO) or infinite (iMPO)."""
+    def __init__(self, sites, Ws, bc='finite', IdL=None, IdR=None, max_range=None, explicit_plus_hc=False, mps_unit_cell_width=None): pass
+    def copy(self):
+        """Make a shallow copy of `self`."""
+    def save_hdf5(self, hdf5_saver, h5gr, subpath):
+        """Export `self` into a HDF5 file."""
+    def from_hdf5(cls, hdf5_loader, h5gr, subpath):
+        """Load instance from a HDF5 file."""
+    def from_grids(cls, sites, grids, bc='finite', IdL=None, IdR=None, Ws_qtotal=None, legs=None, max_range=None, explicit_plus_hc=False, mps_unit_cell_width=None):
+        """Initialize an MPO from `grids`."""
+    def from_wavepacket(cls, sites, coeff, op, eps=1e-15, unit_cell_width=None):
+        """Create a (finite) MPO wave packet representing ``sum_i coeff[i] op_i``."""
+    def from_Wflat(cls, sites, Wflat, bc='finite', dtype=None, permute=True, legL=None, IdL=None, IdR=None, max_range=None, unit_cell_width=None):
+        """Construct a matrix product operator from a set of numpy array `Wflat`."""
+    def test_sanity(self):
+        """Sanity check, raises ValueErrors, if something is wrong."""
+    def chi(self):
+        """Dimensions of the virtual bonds."""
+    def get_W(self, i, copy=False):
+        """Return `W` at site `i`."""
+    def set_W(self, i, W):
+        """Set `W` at site `i`. Note that ``W`` may be modified in-place."""
+    def get_IdL(self, i):
+        """Return index of `IdL` at bond to the *left* of site `i`."""
+    def get_IdR(self, i):
+        """Return index of `IdR` at bond to the *right* of site `i`."""
+    def enlarge_mps_unit_cell(self, factor=2):
+        """Repeat the unit cell for infinite MPS boundary conditions; in place."""
+    def group_sites(self, n=2, grouped_sites=None):
+        """Modify `self` inplace to group sites."""
+    def extract_segment(self, first, last):
+        """Extract a segment from the MPO."""
+    def sort_legcharges(self):
+        """Sort virtual legs by charges. In place."""
+    def make_U(self, dt, approximation='II'):
+        """Creates the U_I or U_II propagator."""
+    def make_U_I(self, dt):
+        """Creates the :math:`U_I` propagator with `W_I` tensors."""
+    def make_U_II(self, dt):
+        """Creates the :math:`U_{II}` propagator."""
+    def expectation_value(self, psi, tol=1e-10, max_range=100, init_env_data={}):
+        """Calculate ``<psi|self|psi>/<psi|psi>`` (or density for infinite)."""
+    def expectation_value_finite(self, psi, init_env_data={}):
+        """Calculate ``<psi|self|psi>/<psi|psi>`` for finite MPS."""
+    def expectation_value_TM(self, psi, tol=1e-10, init_env_data={}):
+        """Calculate ``<psi|self|psi>/<psi|psi> / L`` from the MPOTransferMatrix."""
+    def expectation_value_power(self, psi, tol=1e-10, max_range=100):
+        """Calculate ``<psi|self|psi>/<psi|psi>`` with a power-method."""
+    def variance(self, psi, exp_val=None):
+        """Calculate ``<psi|self^2|psi> - <psi|self|psi>^2``."""
+    def prefactor(self, i, ops):
+        """Get prefactor for a given string of operators in self."""
+    def to_TermList(self, op_basis, start=None, max_range=None, cutoff=1e-12, ignore=['Id', 'JW']):
+        """Obtain a `TermList` represented by self."""
+    def dagger(self):
+        """Return hermitian conjugate copy of self."""
+    def is_hermitian(self, eps=1e-10, max_range=None):
+        """Check if `self` is a hermitian MPO."""
+    def is_equal(self, other, eps=1e-10, max_range=None):
+        """Check if `self` and `other` represent the same MPO to precision `eps`."""
+    def apply(self, psi, options):
+        """Apply `self` to an MPS `psi` and compress `psi` in place."""
+    def apply_naively(self, psi):
+        """Applies an MPO to an MPS (in place) naively, without compression."""
+    def apply_zipup(self, psi, options):
+        """Applies an MPO to an MPS (in place) with the zip-up method."""
+    def plus_identity(self, alpha, beta, sites=[0]):
+        """Compute a new MPO :math:`alpha * 1 + beta * \mathtt{self}`."""
+    def overlap(self, other, understood_infinite: bool=False, num_sites: int=None):
+        """Overlap between two MPOs."""
+    def distance(self, other, understood_infinite: bool=False, num_sites: int=None):
+        """The Frobenius distance induced by the inner product :meth:`overlap`."""
+def make_W_II(t, A, B, C, D):
+    """W_II approx to exp(t H) from MPO parts (A, B, C, D)."""
+
+class MPOGraph:
+    """Representation of an MPO by a graph, based on a 'finite state machine'."""
+    def __init__(self, sites, bc='finite', max_range=None, unit_cell_width=None): pass
+    def from_terms(cls, terms, sites, bc, insert_all_id=True, unit_cell_width=None):
+        """Initialize an :class:`MPOGraph` from OnsiteTerms and CouplingTerms."""
+    def from_term_list(cls, term_list, sites, bc, insert_all_id=True, unit_cell_width=None):
+        """Initialize from a list of operator terms and prefactors."""
+    def test_sanity(self):
+        """Sanity check, raises ValueErrors, if something is wrong."""
+    def add(self, i, keyL, keyR, opname, strength, check_op=True, skip_existing=False):
+        """Insert an edge into the graph."""
+    def add_string_left_to_right(self, i, j, key, opname='Id', check_op=True, skip_existing=True):
+        """Insert a bunch of edges for an 'operator string' into the graph."""
+    def add_string_right_to_left(self, j, i, key, opname='Id', check_op=True, skip_existing=True):
+        """Insert a bunch of edges for an 'operator string' into the graph."""
+    def add_missing_IdL_IdR(self, insert_all_id=True):
+        """Add missing identity ('Id') edges connecting ``'IdL'->'IdL' and ``'IdR'->'IdR'``."""
+    def has_edge(self, i, keyL, keyR):
+        """True if there is an edge from `keyL` on bond (i-1, i) to `keyR` on bond (i, i+1)."""
+    def build_MPO(self, Ws_qtotal=None):
+        """Build the MPO represented by the graph (`self`)."""
+
+class MPOEnvironment:
+    """Stores partial contractions of :math:`<bra|H|ket>` for an MPO `H`."""
+    def __init__(self, bra, H, ket, cache=None, **init_env_data): pass
+    def init_first_LP_last_RP(self, init_LP=None, init_RP=None, age_LP=0, age_RP=0, start_env_sites=None, force_init_method='iter', gmres_options=None):
+        """(Re)initialize first LP and last RP from the given data."""
+    def test_sanity(self):
+        """Sanity check, raises ValueErrors, if something is wrong."""
+    def init_LP(self, i, start_env_sites=0):
+        """Build an initial left part ``LP``."""
+    def init_RP(self, i, start_env_sites=0):
+        """Build initial right part ``RP`` for an MPS/MPOEnvironment."""
+    def get_LP(self, i, store=True):
+        """Calculate LP at given site from nearest available one (including `i`)."""
+    def get_RP(self, i, store=True):
+        """Calculate RP at given site from nearest available one (including `i`)."""
+    def full_contraction(self, i0):
+        """Calculate the energy by a full contraction of the network."""
+
+class MPOEnvironmentBuilder:
+    """Construct boundary environments for periodic MPOEnvironments."""
+    def __init__(self, H, psi): pass
+    def test_sanity(self):
+        """Sanity check, raises ValueErrors, if something is wrong."""
+    def init_LP_RP_iterative(self, which='both', calc_E=False, tol_c0=None, gmres_options=None, tol_id=1e-12):
+        """Construct boundary environments for periodic MPO environments."""
+
+class MPOTransferMatrix:
+    """Transfermatrix of a Hamiltonian-like MPO sandwiched between canonicalized MPS."""
+    def __init__(self, H, psi, transpose=False, guess=None, _subtraction_gauge='rho'): pass
+    def matvec(self, vec, project=True):
+        """One matvec-operation."""
+    def dominant_eigenvector(self, **kwargs):
+        """Find dominant eigenvector of self using :mod:`scipy.sparse`."""
+    def energy(self, dom_vec):
+        """Given the dominant eigenvector, calculate the energy per MPS site."""
+    def find_init_LP_RP(cls, H, psi, first=0, last=None, guess_init_env_data=None, calc_E=False, tol_ev0=1e-08, _subtraction_gauge='rho', **kwargs):
+        """Find the initial LP and RP."""
+def grid_insert_ops(site, grid):
+    """Replaces entries representing operators in a grid of ``W[i]`` with npc.Arrays."""
+
+# Module: tenpy.networks.purification_mps
+
+
+class PurificationMPS:
+    """An MPS representing a finite-temperature ensemble using purification."""
+    def test_sanity(self):
+        """Sanity check, raises ValueErrors, if something is wrong."""
+    def from_density_matrix(cls, sites, rho, form=None, cutoff=1e-16, normalize=True, unit_cell_width=None):
+        """Construct a purification from a single tensor `rho` of the density matrix."""
+    def from_infiniteT(cls, sites, bc='finite', form='B', dtype=np.float64, unit_cell_width=None):
+        """Initial state corresponding to grand-canonical infinite-temperature ensemble."""
+    def from_infiniteT_canonical(cls, sites, charge_sector, dtype=np.float64, conserve_ancilla_charge=False, unit_cell_width=None):
+        """Initial state corresponding to *canonical* infinite-temperature ensemble."""
+    def entanglement_entropy_segment(self, segment=[0], first_site=None, n=1, legs='p'):
+        """Calculate entanglement entropy for general geometry of the bipartition."""
+    def mutinf_two_site(self, max_range=None, n=1, legs='p'):
+        """Calculate the two-site mutual information :math:`I(i:j)`."""
+    def swap_sites(self, i, swapOP='auto', trunc_par={}): pass
+    def sample_measurements(self, sample_q, first_site=0, last_site=None, ops=None, rng=None, norm_tol=1e-12, complex_amplitude=True):
+        """Sample measurement results in the computational basis."""
+def convert_model_purification_canonical_conserve_ancilla_charge(model):
+    """Extend charges of model for :meth:`PurificationMPS.from_infiniteT_canonical`."""
+
+# Module: tenpy.networks.terms
+
+
+class TermList:
+    """A list of terms (=operator names and sites they act on) and associated strengths."""
+    def __init__(self, terms, strength=1.0): pass
+    def from_lattice_locations(cls, lattice, terms, strength=1.0, shift=None):
+        """Initialize from a list of terms given in lattice indices instead of MPS indices."""
+    def to_OnsiteTerms_CouplingTerms(self, sites):
+        """Convert to :class:`OnsiteTerms` and :class:`CouplingTerms`"""
+    def order_combine(self, sites):
+        """Order and combine operators in each term."""
+    def limits(self):
+        """Return the left-most site and right-most site any operator acts on."""
+    def shift(self, i0):
+        """Return a copy where `i0` is added to all indices `i` in :attr:`terms`."""
+    def max_range(self): pass
+def order_combine_term(term, sites):
+    """Combine operators in a term to one terms per site."""
+
+class OnsiteTerms:
+    """Operator names, site indices and strengths representing onsite terms."""
+    def __init__(self, L): pass
+    def max_range(self):
+        """Maximum range of the terms."""
+    def add_onsite_term(self, strength, i, op):
+        """Add a onsite term on a given MPS site."""
+    def add_to_graph(self, graph):
+        """Add terms from :attr:`onsite_terms` to an MPOGraph."""
+    def to_Arrays(self, sites):
+        """Convert the :attr:`onsite_terms` into a list of np_conserved Arrays."""
+    def remove_zeros(self, tol_zero=1e-15):
+        """Remove entries close to 0 from :attr:`onsite_terms`."""
+    def add_to_nn_bond_Arrays(self, H_bond, sites, finite, distribute=(0.5, 0.5)):
+        """Add :attr:`self.onsite_terms` into nearest-neighbor bond arrays."""
+    def to_TermList(self):
+        """Convert :attr:`onsite_terms` into a :class:`TermList`."""
+
+class CouplingTerms:
+    """Operator names, site indices and strengths representing two-site coupling terms."""
+    def __init__(self, L): pass
+    def max_range(self):
+        """Determine the maximal range in :attr:`coupling_terms`."""
+    def add_coupling_term(self, strength, i, j, op_i, op_j, op_string='Id'):
+        """Add a two-site coupling term on given MPS sites."""
+    def coupling_term_handle_JW(self, strength, term, sites, op_string=None):
+        """Helping function to call before :meth:`add_coupling_term`."""
+    def plot_coupling_terms(self, ax, lat, style_map='default', common_style={'linestyle': '--'}, text=None, text_pos=0.4):
+        """Plot coupling terms into a given lattice."""
+    def add_to_graph(self, graph):
+        """Add terms from :attr:`coupling_terms` to an MPOGraph."""
+    def to_nn_bond_Arrays(self, sites):
+        """Convert the :attr:`coupling_terms` into Arrays on nearest neighbor bonds."""
+    def remove_zeros(self, tol_zero=1e-15):
+        """Remove entries close to 0 from :attr:`coupling_terms`."""
+    def to_TermList(self):
+        """Convert :attr:`onsite_terms` into a :class:`TermList`."""
+
+class MultiCouplingTerms:
+    """Operator names, site indices and strengths representing general `M`-site coupling terms."""
+    def __init__(self, L): pass
+    def max_range(self):
+        """Determine the maximal range in :attr:`coupling_terms`."""
+    def add_multi_coupling_term(self, strength, ijkl, ops_ijkl, op_string='Id', switchLR='middle_i'):
+        """Add a multi-site coupling term."""
+    def multi_coupling_term_handle_JW(self, strength, term, sites, op_string=None):
+        """Helping function to call before :meth:`add_multi_coupling_term`."""
+    def add_coupling_term(self, strength, i, j, op_i, op_j, op_string='Id', switchLR=None):
+        """Add a two-site coupling term on given MPS sites."""
+    def add_to_graph(self, graph):
+        """Add terms represented by `self` to an MPOGraph."""
+    def remove_zeros(self, tol_zero=1e-15):
+        """Remove entries close to 0 from :attr:`coupling_terms`."""
+    def to_TermList(self):
+        """Convert :attr:`coupling_terms` into a :class:`TermList`."""
+
+class ExponentiallyDecayingTerms:
+    """Represent a sum of exponentially decaying (long-range) couplings."""
+    def __init__(self, L): pass
+    def is_empty(self): pass
+    def add_exponentially_decaying_coupling(self, strength, lambda_, op_i, op_j, subsites=None, subsites_start=None, op_string='Id'):
+        """Add an exponentially decaying long-range coupling."""
+    def add_centered_exponentially_decaying_term(self, strength, lambda_, op_i, op_j, i, subsites=None, op_string='Id'):
+        """Add exponentially decaying terms centered around a single site."""
+    def add_to_graph(self, graph, key='exp-decay'):
+        """Add terms from :attr:`onsite_terms` to an MPOGraph."""
+    def to_TermList(self, cutoff=0.01, bc='finite'):
+        """Convert self into a :class:`TermList`."""
+    def max_range(self):
+        """Maximum range of the couplings."""
+
+# Module: tenpy.networks.uniform_mps
+
+
+class UniformMPS:
+    """A Uniform Matrix Product State, only defined in the thermodynamic limit."""
+    def __init__(self, sites, ALs, ARs, ACs, Cs, norm=1.0, unit_cell_width: int=None): pass
+    def test_sanity(self):
+        """Sanity check, raises ValueErrors, if something is wrong."""
+    def test_validity(self, cutoff=1e-08):
+        """Check if AL C = AC and C AR = AC"""
+    def copy(self):
+        """Returns a copy of `self`."""
+    def save_hdf5(self, hdf5_saver, h5gr, subpath):
+        """Export `self` into a HDF5 file."""
+    def to_MPS(self, cutoff=1e-16, check_overlap=False):
+        """Convert UniformMPS to MPS."""
+    def to_diagonal_gauge(self, cutoff=1e-16, check_overlap=False):
+        """Convert a UniformMPS to diagonal gauge, i.e. where all of the bond matrices are diagonal."""
+    def from_hdf5(cls, hdf5_loader, h5gr, subpath):
+        """Load instance from a HDF5 file."""
+    def from_MPS(cls, psi):
+        """Convert an infinite MPS to a uniform MPS."""
+    def from_lat_product_state(cls, lat, p_state, **kwargs): pass
+    def from_product_state(cls, sites, p_state, bc='finite', dtype=np.float64, permute=True, form='B', chargeL=None): pass
+    def from_Bflat(cls, sites, ALflat, ARflat, ACflat, Cflat, dtype=None, permute=True, legL=None):
+        """Construct a matrix product state from a set of numpy arrays and singular vals."""
+    def from_full(cls, sites, psi, form=None, cutoff=1e-16, normalize=True, bc='finite', outer_S=None): pass
+    def from_singlets(cls, site, L, pairs, up='up', down='down', lonely=[], lonely_state='up', bc='finite'): pass
+    def chi(self):
+        """Dimensions of the (nontrivial) virtual bonds."""
+    def get_B(self, i, form='B', copy=False, cutoff=1e-16, label_p=None):
+        """Return (view of) `B` at site `i` in canonical form."""
+    def get_AL(self, i, copy=False, label_p=None):
+        """Return (view of) `AL` at site `i` in canonical form."""
+    def get_AR(self, i, copy=False, label_p=None):
+        """Return (view of) `AR` at site `i` in canonical form."""
+    def get_AC(self, i, copy=False, label_p=None):
+        """Return (view of) `AC` at site `i` in canonical form."""
+    def get_C(self, i, copy=False):
+        """Return center matrix C on the left of site `i`"""
+    def set_B(self, i, B, form='B'):
+        """Set tensor `B` at site `i`."""
+    def set_AL(self, i, AL):
+        """Set `AL` at site `i`"""
+    def set_AR(self, i, AR):
+        """Set `AR` at site `i`"""
+    def set_AC(self, i, AC):
+        """Set `AC` at site `i`"""
+    def set_C(self, i, C):
+        """Set `C` left of site `i`"""
+    def set_svd_theta(self, i, theta, trunc_par=None, update_norm=False): pass
+    def get_SL(self, i): pass
+    def get_SR(self, i): pass
+    def set_SL(self, i, S): pass
+    def set_SR(self, i, S): pass
+    def get_theta(self, i, n=2, cutoff=1e-16, formL=1.0, formR=1.0):
+        """Calculates the `n`-site wavefunction on ``sites[i:i+n]``."""
+    def convert_form(self, new_form='B'): pass
+    def enlarge_mps_unit_cell(self, factor=2):
+        """Repeat the unit cell for infinite uniform MPS boundary conditions; in place."""
+    def roll_mps_unit_cell(self, shift=1):
+        """Shift the section we define as unit cell of an infinite MPS; in place."""
+    def spatial_inversion(self):
+        """Perform a spatial inversion along the MPS."""
+    def group_sites(self, n=2, grouped_sites=None): pass
+    def group_split(self, trunc_par=None): pass
+    def get_grouped_mps(self, blocklen): pass
+    def extract_segment(self, first, last): pass
+    def get_total_charge(self, only_physical_legs=False):
+        """Calculate and return the `qtotal` of the whole MPS (when contracted)."""
+    def gauge_total_charge(self, qtotal=None, vL_leg=None, vR_leg=None): pass
+    def entanglement_entropy(self, n=1, bonds=None, for_matrix_S=True): pass
+    def entanglement_entropy_segment(self, segment=[0], first_site=None, n=1): pass
+    def entanglement_entropy_segment2(self, segment, n=1): pass
+    def entanglement_spectrum(self, by_charge=False): pass
+    def get_rho_segment(self, segment): pass
+    def probability_per_charge(self, bond=0): pass
+    def average_charge(self, bond=0): pass
+    def charge_variance(self, bond=0): pass
+    def mutinf_two_site(self, max_range=None, n=1): pass
+    def overlap(self, other, charge_sector=None, ignore_form=False, **kwargs):
+        """Compute overlap ``<self|other>``."""
+    def sample_measurements(self, first_site=0, last_site=None, ops=None, rng=None, norm_tol=1e-12): pass
+    def norm_test(self, force=False): pass
+    def canonical_form(self, **kwargs): pass
+    def canonical_form_finite(self, renormalize=True, cutoff=0.0, envs_to_update=None): pass
+    def canonical_form_infinite(self, renormalize=True, tol_xi=1000000.0): pass
+    def correlation_length(self, target=1, tol_ev0=1e-08, charge_sector=0): pass
+    def add(self, other, alpha, beta, cutoff=1e-15): pass
+    def apply_local_op(self, i, op, unitary=None, renormalize=False, cutoff=1e-13): pass
+    def apply_product_op(self, ops, unitary=None, renormalize=False): pass
+    def perturb(self, randomize_params=None, close_1=True, canonicalize=None): pass
+    def swap_sites(self, i, swap_op='auto', trunc_par=None): pass
+    def permute_sites(self, perm, swap_op='auto', trunc_par=None, verbose=None): pass
+    def compute_K(self, perm, swap_op='auto', trunc_par=None, canonicalize=1e-06, verbose=None, expected_mean_k=0.0): pass
+    def compress(self, options): pass
+    def compress_svd(self, trunc_par): pass
+    def outer_virtual_legs(self): pass
+
+# Module: tenpy.networks.momentum_mps
+
+
+class MomentumMPS:
+    """A Matrix Product State, finite (MPS) or infinite (iMPS)."""
+    def __init__(self, Xs, uMPS, p, n_sites=1): pass
+    def copy(self):
+        """Returns a copy of `self`."""
+    def save_hdf5(self, hdf5_saver, h5gr, subpath):
+        """Export `self` into a HDF5 file."""
+    def from_hdf5(cls, hdf5_loader, h5gr, subpath):
+        """Load instance from a HDF5 file."""
+    def get_X(self, i, copy=False):
+        """Return (view of) `X` at site `i`."""
+    def set_X(self, i, X):
+        """Set `X` at site `i`."""
+
+# Module: tenpy.networks.mps
+
+
+class MPSGeometry:
+    """Base class providing methods regarding the 1D geometry of MPS-like tensornetworks."""
+    def __init__(self, sites, bc, unit_cell_width=None): pass
+    def test_sanity(self): pass
+    def L(self):
+        """Number of physical sites; for an iMPS the len of the MPS unit cell."""
+    def dim(self):
+        """List of local physical dimensions."""
+    def finite(self):
+        """Distinguish MPS vs iMPS."""
+    def nontrivial_bonds(self):
+        """Slice of the non-trivial bond indices, depending on ``self.bc``."""
+    def N_sites_per_hor_spacing(self):
+        """Number of sites per horizontal lattice spacing."""
+    def shift_charges_unit_cells(self, charges, num_unit_cells):
+        """Shift charges by an integer multiple of unit cells."""
+    def shift_Site_unit_cells(self, site, num_unit_cells):
+        """Shift a `site` by an integer multiple of unit cells."""
+    def shift_Array_unit_cells(self, arr, num_unit_cells, inplace: bool=False):
+        """Shift an Array by an integer multiple of unit cells."""
+    def get_site(self, i):
+        """Get the `i`-th site."""
+
+class BaseMPSExpectationValue:
+    """Base class providing unified expectation value framework for MPS and MPSEnvironment."""
+    def expectation_value(self, ops, sites=None, axes=None):
+        """Expectation value ``<bra|ops|ket>`` of (n-site) operator(s)."""
+    def apply_JW_string_left_of_virt_leg(self, theta, virt_leg_index, i):
+        """Apply signs on a virtual MPS leg equivalent to a Jordan-Wigner string on the left."""
+    def expectation_value_multi_sites(self, operators, i0):
+        """Expectation value  ``<bra|op0_{i0}op1_{i0+1}...opN_{i0+N}|ket>``."""
+    def correlation_function(self, ops1, ops2, sites1=None, sites2=None, opstr=None, str_on_first=True, hermitian=False, autoJW=True):
+        """Correlation function of single-site operators."""
+    def expectation_value_term(self, term, autoJW=True):
+        """Expectation value  ``<bra|op_{i0}op_{i1}...op_{iN}|ket>``."""
+    def term_correlation_function_right(self, term_L, term_R, i_L=0, j_R=None, autoJW=True, opstr=None):
+        """Correlation function between (multi-site) terms, moving the right term, fix left term."""
+    def term_correlation_function_left(self, term_L, term_R, i_L=None, j_R=0, autoJW=True, opstr=None):
+        """Correlation function between (multi-site) terms, moving the left term, fix right term."""
+    def term_list_correlation_function_right(self, term_list_L, term_list_R, i_L=0, j_R=None, autoJW=True, opstr=None):
+        """Correlation function between sums of multi-site terms, moving the right sum of term."""
+    def get_op(self, op_list, i):
+        """Given a list of operators, select the one corresponding to site `i`."""
+
+class MPS:
+    """A Matrix Product State, finite (MPS) or infinite (iMPS)."""
+    def __init__(self, sites, Bs, SVs, bc='finite', form='B', norm=1.0, unit_cell_width=None, understood_shift_symmetry: bool=False): pass
+    def test_sanity(self):
+        """Sanity check, raises ValueErrors, if something is wrong."""
+    def copy(self):
+        """Returns a copy of `self`."""
+    def save_hdf5(self, hdf5_saver, h5gr, subpath):
+        """Export `self` into a HDF5 file."""
+    def from_hdf5(cls, hdf5_loader, h5gr, subpath):
+        """Load instance from a HDF5 file."""
+    def from_lat_product_state(cls, lat, p_state, allow_incommensurate=False, **kwargs):
+        """Construct an MPS from a product state given in lattice coordinates."""
+    def from_product_state(cls, sites, p_state, bc='finite', dtype=np.float64, permute=True, form='B', chargeL=None, unit_cell_width=None, understood_shift_symmetry: bool=False):
+        """Construct a matrix product state from a given product state."""
+    def from_random_unitary_evolution(cls, sites, chi, p_state, bc='finite', dtype=np.float64, permute=True, form='B', chargeL=None, understood_shift_symmetry: bool=False):
+        """Construct a matrix product state by evolving a product state with random unitaries."""
+    def from_desired_bond_dimension(cls, sites, chis, bc='finite', dtype=np.float64, permute=True, chargeL=None, unit_cell_width=None, understood_shift_symmetry: bool=False):
+        """Construct a matrix product state with given bond dimensions from random matrices."""
+    def from_Bflat(cls, sites, Bflat, SVs=None, bc='finite', dtype=None, permute=True, form='B', legL=None, unit_cell_width=None, understood_shift_symmetry: bool=False):
+        """Construct a matrix product state from a set of numpy arrays `Bflat` and singular vals."""
+    def from_full(cls, sites, psi, form=None, cutoff=1e-16, normalize=True, bc='finite', outer_S=None, unit_cell_width=None, understood_shift_symmetry: bool=False):
+        """Construct an MPS from a single tensor `psi` with one leg per physical site."""
+    def from_singlets(cls, site, L, pairs, up='up', down='down', lonely=[], lonely_state='up', bc='finite', unit_cell_width=None, understood_shift_symmetry: bool=False):
+        """Create an MPS of entangled singlets."""
+    def from_product_mps_covering(cls, mps_covering, index_map, bc='finite', unit_cell_width=None, understood_shift_symmetry: bool=False):
+        """Create an MPS as a product of (many) local mps covering all sites to be created."""
+    def project_onto_charge_sector(cls, sites, p_state_list, charge_sector, dtype=float, bc='finite', form='B', norm=1.0, unit_cell_width=None, understood_shift_symmetry: bool=False):
+        """Generates an MPS from a product state list which is projected onto a given charge sector."""
+    def L(self):
+        """Number of physical sites; for an iMPS the len of the MPS unit cell."""
+    def dim(self):
+        """List of local physical dimensions."""
+    def finite(self):
+        """Distinguish MPS vs iMPS."""
+    def chi(self):
+        """Dimensions of the (nontrivial) virtual bonds."""
+    def get_B(self, i, form='B', copy=False, cutoff=1e-16, label_p=None):
+        """Return (view of) `B` at site `i` in canonical form."""
+    def set_B(self, i, B, form='B'):
+        """Set `B` at site `i`."""
+    def set_svd_theta(self, i, theta, trunc_par=None, update_norm=False):
+        """SVD a two-site wave function `theta` and save it in `self`."""
+    def get_SL(self, i):
+        """Return singular values on the left of site `i`."""
+    def get_SR(self, i):
+        """Return singular values on the right of site `i`."""
+    def set_SL(self, i, S):
+        """Set singular values on the left of site `i`. No copy is made!"""
+    def set_SR(self, i, S):
+        """Set singular values on the right of site `i`. No copy is made!"""
+    def get_theta(self, i, n=2, cutoff=1e-16, formL=1.0, formR=1.0):
+        """Calculates the `n`-site wavefunction on ``sites[i:i+n]``."""
+    def convert_form(self, new_form='B'):
+        """Transform self into different canonical form (by scaling the legs with singular values)."""
+    def enlarge_mps_unit_cell(self, factor=2):
+        """Repeat the unit cell for infinite MPS boundary conditions; in place."""
+    def roll_mps_unit_cell(self, shift=1):
+        """Shift the section we define as unit cell of an infinite MPS; in place."""
+    def overlap_translate_finite(self, psi, shift=1):
+        """Contract ``<self|T^N|psi>`` for translation `T` with finite, periodic boundaries."""
+    def enlarge_chi(self, extra_legs, random_fct=np.random.normal):
+        """Artificially enlarge the bond dimension by the specified extra legs/charges. In place."""
+    def spatial_inversion(self):
+        """Perform a spatial inversion along the MPS."""
+    def group_sites(self, n=2, grouped_sites=None):
+        """Modify `self` inplace to group sites."""
+    def group_split(self, trunc_par=None):
+        """Modify `self` inplace to split previously grouped sites."""
+    def get_grouped_mps(self, blocklen):
+        """Like :meth:`group_sites`, but make a copy."""
+    def extract_segment(self, first, last):
+        """Extract an segment from a finite or infinite MPS."""
+    def extract_enlarged_segment(self, psi_left, psi_right, first, last, add_unitcells=None, new_first_last=None, cutoff=1e-14):
+        """Extract an enlarged segment from an initially smaller segment MPS."""
+    def get_total_charge(self, only_physical_legs=False):
+        """Calculate and return the `qtotal` of the whole MPS (when contracted)."""
+    def gauge_total_charge(self, qtotal=None, vL_leg=None, vR_leg=None):
+        """Gauge the legcharges of the virtual bonds s.t. MPS has given `qtotal`; in place."""
+    def entanglement_entropy(self, n=1, bonds=None, for_matrix_S=False):
+        """Calculate the (half-chain) entanglement entropy for all nontrivial bonds."""
+    def entanglement_entropy_segment(self, segment=[0], first_site=None, n=1):
+        """Calculate entanglement entropy for general geometry of the bipartition."""
+    def entanglement_entropy_segment2(self, segment, n=1):
+        """Calculate entanglement entropy for general geometry of the bipartition."""
+    def entanglement_spectrum(self, by_charge=False):
+        """Return entanglement energy spectrum."""
+    def get_rho_segment(self, segment):
+        """Return reduced density matrix for a segment."""
+    def probability_per_charge(self, bond=0):
+        """Return probabilities of charge value on the left of a given bond."""
+    def average_charge(self, bond=0):
+        """Return the average charge for the block on the left of a given bond."""
+    def charge_variance(self, bond=0):
+        """Return the charge variance on the left of a given bond."""
+    def get_charge_tree_for_given_charge_sector(sites: list, charge_sector: tuple):
+        """Construct the charge-tree for a given charge sector."""
+    def mutinf_two_site(self, max_range=None, n=1):
+        """Calculate the two-site mutual information :math:`I(i:j)`."""
+    def overlap(self, other, charge_sector=None, ignore_form=False, understood_infinite=False, **kwargs):
+        """Compute overlap ``<self|other>``."""
+    def expectation_value_terms_sum(self, term_list):
+        """Calculate expectation values for a bunch of terms and sum them up."""
+    def sample_measurements(self, first_site=0, last_site=None, ops=None, rng=None, norm_tol=1e-12, complex_amplitude=True):
+        """Sample measurement results in the computational basis."""
+    def norm_test(self):
+        """Check that self is in canonical form."""
+    def canonical_form(self, **kwargs):
+        """Bring self into canonical 'B' form, (re-)calculate singular values; in place."""
+    def canonical_form_finite(self, renormalize=True, cutoff=0.0, envs_to_update=None):
+        """Bring a finite (or segment) MPS into canonical form; in place."""
+    def canonical_form_infinite1(self, renormalize=True, tol_xi=1000000.0):
+        """Bring an infinite MPS into canonical form; in place."""
+    def canonical_form_infinite2(self, renormalize=True, tol=1e-15, arnoldi_params=None, cutoff=1e-15):
+        """Convert infinite MPS to canonical form; in place."""
+    def correlation_length2(self, target=1, tol_ev0=1e-08, charge_sector=0, return_charges=False):
+        """Calculate the correlation length by diagonalizing the transfer matrix."""
+    def correlation_length(self, target=1, tol_ev0=1e-08, charge_sector=0, return_charges=False):
+        """Calculate the correlation length by diagonalizing the transfer matrix."""
+    def correlation_length_charge_sectors(self, drop_symmetric=True, include_0=True):
+        """Return possible `charge_sector` argument for :meth:`correlation_length`."""
+    def add(self, other, alpha, beta, cutoff=1e-15):
+        """Return an MPS which represents ``alpha|self> + beta |others>``."""
+    def subspace_expansion(self, expand_into=[], trunc_par={'svd_min': 1e-08}):
+        """Subspace expansion increasing chi without changing the represented state."""
+    def apply_local_op(self, i, op, unitary=None, renormalize=False, cutoff=1e-13, understood_infinite=False):
+        """Apply a local (one or multi-site) operator to `self`. In place."""
+    def apply_product_op(self, ops, unitary=None, renormalize=False):
+        """Apply a (global) product of local onsite operators to `self`. In place."""
+    def apply_local_term(self, term, autoJW=True, i_offset=0, canonicalize=True, renormalize=False):
+        """Similar as :meth:`apply_local_op`, but for a whole `term` acting on multiple sites."""
+    def perturb(self, randomize_params=None, close_1=True, canonicalize=None):
+        """Locally perturb the state a little bit; in place."""
+    def swap_sites(self, i, swap_op='auto', trunc_par=None):
+        """Swap the two neighboring sites `i` and `i+1`; in place."""
+    def permute_sites(self, perm, swap_op='auto', trunc_par=None):
+        """Applies the permutation perm to the state; in place."""
+    def compute_K(self, perm, swap_op='auto', trunc_par=None, canonicalize=1e-06, expected_mean_k=0.0):
+        """Compute the momentum quantum numbers of the entanglement spectrum for 2D states."""
+    def compress(self, options):
+        """Compress an MPS."""
+    def compress_svd(self, trunc_par):
+        """Compress `self` with a single sweep of SVDs; in place."""
+    def outer_virtual_legs(self):
+        """Return the virtual legs on the left and right of the MPS."""
+
+class BaseEnvironment:
+    """Base class for :class:`MPSEnvironment` storing partial contractions between MPS."""
+    def __init__(self, bra, ket, cache=None, **init_env_data): pass
+    def init_first_LP_last_RP(self, init_LP=None, init_RP=None, age_LP=0, age_RP=0, start_env_sites=0):
+        """(Re)initialize first LP and last RP from the given data."""
+    def test_sanity(self):
+        """Sanity check, raises ValueErrors, if something is wrong."""
+    def init_LP(self, i, start_env_sites=0):
+        """Build initial left part ``LP``."""
+    def init_RP(self, i, start_env_sites=0):
+        """Build initial right part ``RP`` for an MPS/MPOEnvironment."""
+    def get_LP(self, i, store=True):
+        """Calculate LP at given site from nearest available one."""
+    def get_RP(self, i, store=True):
+        """Calculate RP at given site from nearest available one."""
+    def get_LP_age(self, i):
+        """Return number of physical sites in the contractions of get_LP(i)."""
+    def get_RP_age(self, i):
+        """Return number of physical sites in the contractions of get_RP(i)."""
+    def set_LP(self, i, LP, age):
+        """Store part to the left of site `i`. No copy is made!"""
+    def set_RP(self, i, RP, age):
+        """Store part to the right of site `i`. No copy is made!"""
+    def del_LP(self, i):
+        """Delete stored part strictly to the left of site `i`."""
+    def del_RP(self, i):
+        """Delete stored part strictly to the right of site `i`."""
+    def clear(self):
+        """Delete all partial contractions except the left-most `LP` and right-most `RP`."""
+    def has_LP(self, i):
+        """Return True if `LP` left of site `i` is stored."""
+    def has_RP(self, i):
+        """Return True if `RP` right of site `i` is stored."""
+    def cache_optimize(self, short_term_LP=[], short_term_RP=[], preload_LP=None, preload_RP=None):
+        """Update `short_term_keys` for the cache and possibly preload tensors."""
+    def get_initialization_data(self, first=0, last=None, include_bra=False, include_ket=False):
+        """Return data for (re-)initialization of the environment."""
+    def full_contraction(self, i0):
+        """Calculate the overlap by a full contraction of the network."""
+    def expectation_value_terms_sum(self, term_list):
+        """Calculate expectation values for a bunch of terms and sum them up."""
+
+class MPSEnvironment:
+    """Class storing partial contractions between two different MPS and providing expectation values."""
+    def full_contraction(self, i0):
+        """Calculate the overlap by a full contraction of the network."""
+
+class TransferMatrix:
+    """Transfer matrix of two MPS (bra & ket)."""
+    def __init__(self, bra, ket, shift_bra=0, shift_ket=0, transpose=False, charge_sector=0, form='B'): pass
+    def from_Ns_Ms(cls, bra_N, ket_M, transpose=False, charge_sector=0, p_label=['p'], conjugate_Ns=True, unit_cell_width=None):
+        """Initialize a TransferMatrix directly from the MPS tensors."""
+    def charge_sector(self): pass
+    def charge_sector(self, value): pass
+    def matvec(self, vec):
+        """Given `vec` as an npc.Array, apply the transfer matrix."""
+    def initial_guess(self, diag=1.0):
+        """Return a diagonal matrix as initial guess for the eigenvector."""
+    def eigenvectors(self, *args, **kwargs):
+        """Find (dominant) eigenvector(s) of self using :mod:`scipy.sparse`."""
+
+class InitialStateBuilder:
+    """Class to simplify providing common sets of initial states."""
+    def __init__(self, lattice, options, model_dtype=np.float64): pass
+    def run(self):
+        """Build an initial state from a specified method."""
+    def check_total_charge(self, psi):
+        """Assert that the given state has the expected charge."""
+    def from_file(self):
+        """Load the initial state from an existing file."""
+    def lat_product_state(self, p_state=None):
+        """Initialize from a lattice product state."""
+    def mps_product_state(self, p_state=None):
+        """Initialize from a product state."""
+    def mps_state_in_charge_sector(self, charge_sector=None, p_state=None):
+        """Initialize a state on a lattice already in a desired charge sector."""
+    def desired_bond_dimension(self, chi=None):
+        """Initialize a trivial charge MPS with desired bond dimension."""
+    def check_filling(self, p_state):
+        """Ensure that the filling of the product state matches `check_filling` parameter."""
+    def fill_where(self):
+        """Allow to specify a condition where sites should be filled."""
+    def fill_where__get_variables(self):
+        """Define the variables which can be used in the condition of :meth:`fill_where`."""
+    def randomized(self):
+        """Initialize a state with another method and then apply a RandomUnitaryEvolution."""
+def build_initial_state(size, states, filling, mode='random', seed=None):
+    """Build an "initial state" list."""
+
+# Module: tenpy.networks.site
+
+
+class Site:
+    """Collects necessary information about a single local site of a lattice."""
+    def __init__(self, leg, state_labels=None, sort_charge=True, **site_ops): pass
+    def change_charge(self, new_leg_charge=None, permute=None):
+        """Change the charges of the site (in place)."""
+    def sort_charge(self, bunch=True):
+        """Sort the :attr:`leg` charges (in place)."""
+    def test_sanity(self):
+        """Sanity check, raises ValueErrors, if something is wrong."""
+    def dim(self):
+        """Dimension of the local Hilbert space."""
+    def onsite_ops(self):
+        """Dictionary of on-site operators for iteration."""
+    def add_op(self, name, op, need_JW=False, hc=None, permute_dense=None):
+        """Add one on-site operators."""
+    def rename_op(self, old_name, new_name):
+        """Rename an added operator."""
+    def remove_op(self, name):
+        """Remove an added operator."""
+    def state_index(self, label):
+        """Return index of a basis state from its label."""
+    def state_indices(self, labels):
+        """Same as :meth:`state_index`, but for multiple labels."""
+    def get_op(self, name):
+        """Return operator of given name."""
+    def get_hc_op_name(self, name):
+        """Return the hermitian conjugate of a given operator."""
+    def op_needs_JW(self, name):
+        """Whether an (composite) onsite operator is fermionic and needs a Jordan-Wigner string."""
+    def valid_opname(self, name):
+        """Check whether 'name' labels a valid onsite-operator."""
+    def multiply_op_names(self, names):
+        """Multiply operator names together."""
+    def multiply_operators(self, operators):
+        """Multiply local operators (possibly given by their names) together."""
+    def charge_to_JW_signs(self, charges):
+        """Convert charge values to Jordan-Wigner parity."""
+
+class GroupedSite:
+    """Group two or more :class:`Site` into a larger one."""
+    def __init__(self, sites, labels=None, charges='same'): pass
+    def kroneckerproduct(self, ops):
+        """Return the Kronecker product :math:`op0 \otimes op1` of local operators."""
+def group_sites(sites, n=2, labels=None, charges='same'):
+    """Given a list of sites, group each `n` sites together."""
+def set_common_charges(sites, new_charges='same', new_names=None, new_mod=None, sort_charge=True):
+    """Adjust the charges of the given sites *in place* such that they can be used together."""
+def kron(group=True, *ops):
+    """Kronecker product of two or more local operators."""
+
+class SpinHalfSite:
+    """Spin-1/2 site."""
+    def __init__(self, conserve='Sz', sort_charge=True): pass
+
+class SpinSite:
+    """General Spin S site."""
+    def __init__(self, S=0.5, conserve='Sz', sort_charge=True): pass
+
+class FermionSite:
+    """Create a :class:`Site` for spin-less fermions."""
+    def __init__(self, conserve='N', filling=0.5): pass
+
+class SpinHalfFermionSite:
+    """Create a :class:`Site` for spinful (spin-1/2) fermions."""
+    def __init__(self, cons_N='N', cons_Sz='Sz', filling=1.0): pass
+
+class SpinHalfHoleSite:
+    """Create a :class:`Site` for spinful (spin-1/2) fermions, restricted to empty or singly occupied sites"""
+    def __init__(self, cons_N='N', cons_Sz='Sz', filling=1.0): pass
+
+class BosonSite:
+    """Create a :class:`Site` for up to `Nmax` bosons."""
+    def __init__(self, Nmax=1, conserve='N', filling=0.0): pass
+def spin_half_species(SpeciesSite, cons_N, cons_Sz, **kwargs):
+    """Initialize two FermionSite to represent spin-1/2 species."""
+
+class ClockSite:
+    """Quantum clock site."""
+    def __init__(self, q, conserve='Z', sort_charge=True): pass

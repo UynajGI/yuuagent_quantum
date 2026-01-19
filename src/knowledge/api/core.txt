@@ -1,0 +1,6 @@
+# Module: tenpy...__init__
+
+def show_config():
+    """Print information about the version of tenpy and used libraries."""
+def console_main(*command_line_args):
+    """Command line interface."""

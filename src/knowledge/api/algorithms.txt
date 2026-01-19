@@ -1,0 +1,645 @@
+# Module: tenpy.algorithms.vumps
+
+
+class VUMPSEngine:
+    """VUMPS base class with common methods for the TwoSiteVUMPS and SingleSiteVUMPS."""
+    def __init__(self, psi, model, options, **kwargs): pass
+    def lanczos_options(self):
+        """Deprecated alias of :attr:`lanczos_params`."""
+    def S_inv_cutoff(self): pass
+    def run_iteration(self):
+        """Perform a single iteration, consisting of ``N_sweeps_check`` sweeps."""
+    def status_update(self, iteration_start_time: float): pass
+    def is_converged(self):
+        """Determines if the algorithm is converged."""
+    def post_run_cleanup(self):
+        """Perform any final steps or clean up after the main loop has terminated."""
+    def mixer_cleanup(self):
+        """For uniform MPS there is no need to clean up after the mixer."""
+    def run(self):
+        """Run the VUMPS simulation to find the ground state."""
+    def environment_sweeps(self, N_sweeps):
+        """In VUMPS we don't want to do this as we regenerate the environment each time we do an update."""
+    def reset_stats(self, resume_data=None):
+        """Reset the statistics, useful if you want to start a new sweep run."""
+    def get_sweep_schedule(self):
+        """Sweep from site 0 to L-1"""
+    def prepare_update_local(self):
+        """For each update, we need to rebuild the environments from scratch using the most recent tensors"""
+    def make_eff_H(self):
+        """Create new instance of `self.EffectiveH` at `self.i0`."""
+    def post_update_local(self, e_L, e_R, eps_L, eps_R, e_C1, e_C2, e_theta, N0_L, N0_R, N1, **update_data):
+        """Perform post-update actions."""
+    def free_no_longer_needed_envs(self): pass
+    def resume_run(self): pass
+    def tangent_projector_test(self, env_data):
+        """The ground state projector P_GS"""
+
+class SingleSiteVUMPSEngine:
+    """Engine for the single-site VUMPS algorithm."""
+    def __init__(self, psi, model, options, **kwargs): pass
+    def update_env(self, **update_data): pass
+    def update_local(self, theta, **kwargs):
+        """Perform single-site update on the site ``i0``."""
+    def polar_max(self, AC, C1, C2):
+        """Polar decompositions: Given AC and C, find AL and AR such that AL C = AC = C AR"""
+
+class TwoSiteVUMPSEngine:
+    """Engine for the two-site VUMPS algorithm."""
+    def __init__(self, psi, model, options, **kwargs): pass
+    def update_env(self, **update_data): pass
+    def update_local(self, theta, **kwargs):
+        """Perform two-site update on the site ``i0`` and ``i0+1``."""
+    def polar_max(self, AC1, AC2, C1, C3):
+        """Polar decompositions on two sites"""
+    def mixed_svd(self, theta):
+        """Get (truncated) `B` from the new theta (as returned by diag)."""
+
+# Module: tenpy.algorithms.disentangler
+
+
+class Disentangler:
+    """Prototype for a disentangler. Trivial, does nothing."""
+    def __init__(self, parent): pass
+
+class BackwardDisentangler:
+    """Disentangle with backward time evolution."""
+    def __init__(self, parent): pass
+
+class RenyiDisentangler:
+    """Iteratively find `U` which minimized the second Renyi entropy."""
+    def __init__(self, parent): pass
+    def iter(self, theta, U):
+        """Given `theta` and `U`, find another `U` which reduces the 2nd Renyi entropy."""
+
+class NormDisentangler:
+    """Disentangle with the unitary that maximizes overlap with the truncated ``U|theta>``."""
+    def __init__(self, parent): pass
+    def iter(self, theta, U, trunc_params):
+        """Given `theta` and `U`, find `U2` maximizing ``<theta|U2 truncate(U |theta>)``."""
+
+class GradientDescentDisentangler:
+    """Gradient-descent optimization, similar to :class:`RenyiDisentangler`."""
+    def __init__(self, parent): pass
+    def iter(self, theta):
+        """Given `theta`, find a unitary `U` towards minimizing the n-th Renyi entropy."""
+
+class NoiseDisentangler:
+    """Disentangle with tunable noise, i.e. with random unitary close to identity."""
+    def __init__(self, parent): pass
+
+class LastDisentangler:
+    """Disentangle using the same unitary that was used the last time at that bond."""
+
+class DiagonalizeDisentangler:
+    """Disentangle by diagonalizing the two-site density matrix in the auxiliary space."""
+
+class CompositeDisentangler:
+    """Concatenate multiple disentanglers."""
+    def __init__(self, disentanglers): pass
+
+class MinDisentangler:
+    """Chose the disentangler giving the smallest entropy."""
+    def __init__(self, disentanglers, parent): pass
+def get_disentangler(method, parent):
+    """Parse the parameter `method` and construct a :class:`Disentangler` instance."""
+
+# Module: tenpy.algorithms.mps_common
+
+
+class Sweep:
+    """Prototype class for a 'sweeping' algorithm."""
+    def __init__(self, psi, model, options, orthogonal_to=None, **kwargs): pass
+    def S_inv_cutoff(self): pass
+    def get_resume_data(self, sequential_simulations=False): pass
+    def n_optimize(self):
+        """The number of sites to be optimized at once."""
+    def init_env(self, model=None, resume_data=None, orthogonal_to=None):
+        """(Re-)initialize the environment."""
+    def reset_stats(self, resume_data=None):
+        """Reset the statistics. Useful if you want to start a new Sweep run."""
+    def environment_sweeps(self, N_sweeps):
+        """Perform `N_sweeps` sweeps without optimization to update the environment."""
+    def sweep(self, optimize=True):
+        """One 'sweep' of a sweeper algorithm."""
+    def get_sweep_schedule(self):
+        """Define the schedule of the sweep."""
+    def prepare_update_local(self):
+        """Prepare `self` for calling :meth:`update_local`."""
+    def make_eff_H(self):
+        """Create new instance of `self.EffectiveH` at `self.i0` and set it to `self.eff_H`."""
+    def update_local(self, theta, **kwargs):
+        """Perform algorithm-specific local update."""
+    def update_env(self, **update_data):
+        """Update the left and right environments after an update of the state."""
+    def post_update_local(self, err, **update_data):
+        """Algorithm-specific actions to be taken after local update."""
+    def free_no_longer_needed_envs(self):
+        """Remove no longer needed environments after an update."""
+    def mixer_activate(self):
+        """Set `self.mixer` to the class specified by `options['mixer']`."""
+    def mixer_deactivate(self):
+        """Deactivate the mixer."""
+    def mixer_cleanup(self):
+        """Cleanup the effects of a mixer."""
+
+class IterativeSweeps:
+    """Prototype class for algorithms that iterate the same sweep until convergence."""
+    def run(self): pass
+    def pre_run_initialize(self):
+        """Perform preparations before :meth:`run_iteration` is iterated."""
+    def run_iteration(self):
+        """Perform a single iteration."""
+    def status_update(self, iteration_start_time: float):
+        """Emits a status message to the logging system after an iteration."""
+    def stopping_criterion(self, iteration_start_time: float):
+        """Determines if the main loop should be terminated."""
+    def is_converged(self):
+        """Determines if the algorithm is converged."""
+    def post_run_cleanup(self):
+        """Perform any final steps or clean up after the main loop has terminated."""
+
+class EffectiveH:
+    """Prototype class for local effective Hamiltonians used in sweep algorithms."""
+    def __init__(self, env, i0, combine=False, move_right=True): pass
+    def combine_theta(self, theta):
+        """Combine the legs of `theta`, such that it fits to how we combined the legs of `self`."""
+    def update_LP(self, env, i, U=None):
+        """Equivalent to ``env.get_LP(i, store=True)``; optimized for `combine`."""
+    def update_RP(self, env, i, VH=None):
+        """Equivalent to ``env.get_RP(i, store=True)``; optimized for `combine`."""
+
+class OneSiteH:
+    """Class defining the one-site effective Hamiltonian for Lanczos."""
+    def __init__(self, env, i0, combine=False, move_right=True): pass
+    def from_LP_W0_RP(cls, LP, W0, RP, i0=0, combine=False, move_right=True): pass
+    def matvec(self, theta):
+        """Apply the effective Hamiltonian to `theta`."""
+    def combine_Heff(self, env):
+        """Combine LP and RP with W to form LHeff and RHeff, depending on the direction."""
+    def combine_theta(self, theta):
+        """Combine the legs of `theta`, such that it fits to how we combined the legs of `self`."""
+    def to_matrix(self):
+        """Contract `self` to a matrix."""
+    def adjoint(self):
+        """Return the hermitian conjugate of `self`."""
+    def update_LP(self, env, i, U=None): pass
+    def update_RP(self, env, i, VH=None): pass
+
+class TwoSiteH:
+    """Class defining the two-site effective Hamiltonian for Lanczos."""
+    def __init__(self, env, i0, combine=False, move_right=True): pass
+    def matvec(self, theta):
+        """Apply the effective Hamiltonian to `theta`."""
+    def combine_Heff(self, env, left=True, right=True):
+        """Combine LP and RP with W to form LHeff and RHeff."""
+    def combine_theta(self, theta):
+        """Combine the legs of `theta`, such that it fits to how we combined the legs of `self`."""
+    def to_matrix(self):
+        """Contract `self` to a matrix."""
+    def adjoint(self):
+        """Return the hermitian conjugate of `self`."""
+    def update_LP(self, env, i, U=None): pass
+    def update_RP(self, env, i, VH=None): pass
+
+class ZeroSiteH:
+    """Class defining the zero-site effective Hamiltonian for Lanczos."""
+    def __init__(self, env, i0): pass
+    def from_LP_RP(cls, LP, RP, i0=0): pass
+    def matvec(self, theta):
+        """Apply the effective Hamiltonian to `theta`."""
+    def to_matrix(self):
+        """Contract `self` to a matrix."""
+    def adjoint(self):
+        """Return the hermitian conjugate of `self`."""
+
+class DummyTwoSiteH:
+    """A dummy replacement for :meth:`TwoSiteH` with similar methods but no actual MPO."""
+    def __init__(self, *args, **kwargs): pass
+    def combine_theta(self, theta): pass
+
+class Mixer:
+    """Base class for a general Mixer."""
+    def __init__(self, options, sweep_activated=0): pass
+    def update_amplitude(self, sweeps):
+        """Update the amplitude, possibly disable the mixer."""
+    def mixed_svd_2site(self, engine: Sweep, theta: npc.Array, i0: int, mix_left: bool, mix_right: bool, qtotal_LR=[None, None]):
+        """Mix and SVD-like decompose a two-site wavefunction."""
+    def mix_and_decompose_1site(self, engine: Sweep, theta: npc.Array, i0: int, move_right: bool):
+        """Decompose single-site wavefunction and expand/mix an adjacent bond."""
+    def mix_and_decompose_2site(self, engine: Sweep, theta: npc.Array, i0: int, mix_left: bool, mix_right: bool, qtotal_LR=None):
+        """Decompose two-site wavefunction and expand/mix enclosed bond(s)."""
+    def determine_qtotal_L_R(theta_qtotal, qtotal_LR):
+        """Figure out ``qtotal_L, qtotal_R`` such that ``qtotal_L + qtotal_R == theta_qtotal``."""
+
+class DensityMatrixMixer:
+    """Mixer based on reduced density matrices."""
+    def __init__(self, options, sweep_activated=0): pass
+    def mixed_svd_2site(self, engine: Sweep, theta: npc.Array, i0: int, mix_left: bool, mix_right: bool, qtotal_LR=[None, None]): pass
+    def mix_rho(self, engine: Sweep, theta: npc.Array, i0: int, mix_left: bool, mix_right: bool):
+        """Calculate the (possibly mixed) reduced density matrices."""
+    def svd_from_rho(self, engine: Sweep, rho_L: npc.Array, rho_R: npc.Array, theta: npc.Array, qtotal_LR):
+        """Diagonalize ``rho_L, rho_R`` to rewrite `theta` as ``U S V`` with isometric U/V."""
+
+class SubspaceExpansion:
+    """Mixer of a direct subspace expansion."""
+    def __init__(self, options, sweep_activated=0): pass
+    def mix_and_decompose_1site(self, engine: Sweep, theta: npc.Array, i0: int, move_right: bool): pass
+
+class VariationalCompression:
+    """Variational compression of an MPS (in place)."""
+    def __init__(self, psi, options, resume_data=None): pass
+    def pre_run_initialize(self): pass
+    def run_iteration(self): pass
+    def is_converged(self): pass
+    def post_run_cleanup(self): pass
+    def run(self):
+        """Run the compression."""
+    def init_env(self, model=None, resume_data=None, orthogonal_to=None):
+        """Initialize the environment."""
+    def get_sweep_schedule(self):
+        """Define the schedule of the sweep."""
+    def update_local(self, _, optimize=True):
+        """Perform local update."""
+    def update_new_psi(self, theta):
+        """Given a new two-site wave function `theta`, split it and save it in :attr:`psi`."""
+
+class VariationalApplyMPO:
+    """Variational compression for applying an MPO to an MPS (in place)."""
+    def __init__(self, psi, U_MPO, options, **kwargs): pass
+    def init_env(self, U_MPO, resume_data=None, orthogonal_to=None):
+        """Initialize the environment."""
+    def update_local(self, _, optimize=True):
+        """Perform local update."""
+
+class QRBasedVariationalApplyMPO:
+    """Variational MPO application, using QR-based decompositions instead of SVD."""
+    def update_new_psi(self, theta: npc.Array):
+        """Given a new two-site wave function `theta`, split it and save it in :attr:`psi`."""
+
+# Module: tenpy.algorithms.exact_diag
+
+
+class ExactDiag:
+    """(Full) exact diagonalization of the Hamiltonian."""
+    def __init__(self, model, charge_sector=None, sparse=False, max_size=2000000.0): pass
+    def possible_charge_sectors(self): pass
+    def from_infinite_model(cls, model, first=0, last=None, enlarge=None, **kwargs):
+        """Initialize by extracting a finite segment from a ``bc_MPS=infinite'`` model."""
+    def from_H_mpo(cls, H_MPO, *args, **kwargs):
+        """Wrapper taking directly an MPO instead of a Model."""
+    def build_full_H_from_mpo(self):
+        """Calculate self.full_H from the MPO (``H_MPO``) of the model."""
+    def build_full_H_from_bonds(self):
+        """Calculate self.full_H from bond terms (``H_bond``) of the model."""
+    def full_diagonalization(self, *args, **kwargs):
+        """Full diagonalization to obtain all eigenvalues and eigenvectors."""
+    def groundstate(self, charge_sector=None):
+        """Pick the ground state energy and ground state from ``self.V``."""
+    def exp_H(self, dt):
+        """Return ``U(dt) := exp(-i H dt)``."""
+    def mps_to_full(self, mps):
+        """Contract an MPS along the virtual bonds and combine its legs."""
+    def full_to_mps(self, psi, canonical_form='B'):
+        """Convert a full state (with a single leg) to an MPS."""
+    def matvec(self, psi):
+        """Allow to use `self` as LinearOperator for lanczos."""
+    def sparse_diag(self, k, *args, **kwargs):
+        """Call :func:`~tenpy.linalg.np_conserved.speigs`."""
+def get_full_wavefunction(psi: MPS, undo_sort_charge: bool=True):
+    """Get the full wavefunction of a finite MPS as a 1D numpy array."""
+def get_numpy_Hamiltonian(model, from_mpo: bool=True, undo_sort_charge: bool=True):
+    """Get the Hamiltonian as a matrix (2D numpy array)."""
+def get_scipy_sparse_Hamiltonian(model, undo_sort_charge: bool=True):
+    """Get the Hamiltonian as a sparse scipy matrix."""
+
+# Module: tenpy.algorithms.plane_wave_excitation
+
+def append_right_env(As, Bs, R, Ws=None):
+    """Contract all tensors in As and Bs to the right environment R."""
+def append_left_env(As, Bs, L, Ws=None):
+    """Contract all tensors in As and Bs to the left environment L."""
+def construct_orthogonal(M, left=True):
+    """Find (left) orthogonal complement of tensor M"""
+
+class PlaneWaveExcitationEngine:
+    """Base engine to compute quasiparticle excitations for uniform MPS."""
+    def __init__(self, psi, model, options, **kwargs): pass
+    def run(self, p, qtotal_change=None, orthogonal_to=[], E_boosts=[], num_ev=1):
+        """Run the plane-wave algorithm to find excited states of the given model."""
+    def resume_run(self): pass
+    def energy(self, p, X):
+        """Compute the energy of excited states"""
+    def infinite_sum_right(self, p, X):
+        """Infinite sum to the right, see Eq. (194) in :cite:`vanderstraeten2019`"""
+    def infinite_sum_left(self, p, X):
+        """Infinite sum to the left, see Eq. (194) in :cite:`vanderstraeten2019`"""
+
+class Aligned_Effective_H:
+    """Class defining the effective Hamiltonian for the excitation tensors `X`."""
+    def __init__(self, outer): pass
+    def matvec(self, vec): pass
+
+class Unaligned_Effective_H:
+    """Class defining the effective Hamiltonian for the excitation tensors `X`."""
+    def __init__(self, outer, p): pass
+    def matvec(self, vec): pass
+def initial_guess(self, qtotal_change):
+    """Initial guess for the `X` tensors within a fixed charge sector."""
+
+class MultiSitePlaneWaveExcitationEngine:
+    """Engine to compute quasiparticle excitations across multiple sites for uniform MPS."""
+    def __init__(self, psi, model, options, **kwargs): pass
+    def run(self, p, qtotal_change=None, orthogonal_to=[], E_boosts=[], num_ev=1):
+        """Run the plane-wave algorithm to find excited states of the given model."""
+    def resume_run(self): pass
+    def energy(self, p, X):
+        """Compute the energy of excited states"""
+    def attach_right(self, VL, X, As, R, Ws=None):
+        """Attach excitation tensors to a right environment"""
+    def infinite_sum_right(self, p, X):
+        """Infinite sum to the right, see Eq. (194) in :cite:`vanderstraeten2019`"""
+    def attach_left(self, VL, X, As, L, Ws=None):
+        """Attach excitation tensors to a left environment"""
+    def infinite_sum_left(self, p, X):
+        """Infinite sum to the left, see Eq. (194) in :cite:`vanderstraeten2019`"""
+
+class Aligned_Effective_H:
+    """Class defining the effective Hamiltonian for the aligned case."""
+    def __init__(self, outer, p): pass
+    def matvec(self, vec): pass
+
+class Unaligned_Effective_H:
+    """Class defining the effective Hamiltonian for the unaligned case."""
+    def __init__(self, outer, p): pass
+    def matvec(self, vec): pass
+def initial_guess(self, qtotal_change):
+    """Initial guess for the `X` tensors within a fixed charge sector."""
+
+# Module: tenpy.algorithms.dmrg
+
+def run(psi, model, options, **kwargs):
+    """Run the DMRG algorithm to find the ground state of the given model."""
+
+class DMRGEngine:
+    """DMRG base class with common methods for the TwoSiteDMRG and SingleSiteDMRG."""
+    def __init__(self, psi, model, options, **kwargs): pass
+    def pre_run_initialize(self): pass
+    def run_iteration(self):
+        """Perform a single iteration, consisting of ``N_sweeps_check`` sweeps."""
+    def status_update(self, iteration_start_time: float): pass
+    def is_converged(self):
+        """Determines if the algorithm is converged."""
+    def post_run_cleanup(self):
+        """Perform any final steps or clean up after the main loop has terminated."""
+    def run(self):
+        """Run the DMRG simulation to find the ground state."""
+    def reset_stats(self, resume_data=None):
+        """Reset the statistics, useful if you want to start a new sweep run."""
+    def sweep(self, optimize=True, meas_E_trunc=False):
+        """One 'sweep' of the algorithm."""
+    def update_local(self, theta, optimize=True):
+        """Perform site-update on the site ``i0``."""
+    def post_update_local(self, E0, age, N, ov_change, err, **update_data):
+        """Perform post-update actions."""
+    def update_segment_boundaries(self):
+        """Update the singular values at the boundaries of the segment."""
+    def diag(self, theta_guess):
+        """Diagonalize the effective Hamiltonian represented by self."""
+    def plot_update_stats(self, axes, xaxis='time', yaxis='E', y_exact=None, **kwargs):
+        """Plot :attr:`update_stats` to display the convergence during the sweeps."""
+    def plot_sweep_stats(self, axes=None, xaxis='time', yaxis='E', y_exact=None, **kwargs):
+        """Plot :attr:`sweep_stats` to display the convergence with the sweeps."""
+
+class TwoSiteDMRGEngine:
+    """Engine for the two-site DMRG algorithm."""
+    def prepare_svd(self, theta):
+        """Transform theta into matrix for svd."""
+    def mixed_svd(self, theta):
+        """Get (truncated) `B` from the new theta (as returned by diag)."""
+    def set_B(self, U, S, VH):
+        """Update the MPS with the ``U, S, VH`` returned by `self.mixed_svd`."""
+
+class SingleSiteDMRGEngine:
+    """Engine for the single-site DMRG algorithm."""
+    def prepare_svd(self, theta):
+        """Transform theta into matrix for svd."""
+    def mixed_svd(self, theta):
+        """Get (truncated) `B` from the new theta (as returned by diag)."""
+    def set_B(self, U, S, VH):
+        """Update the MPS with the ``U, S, VH`` returned by `self.mixed_svd`."""
+    def mixer_activate(self): pass
+def chi_list(chi_max, dchi=20, nsweeps=20):
+    """Compute a 'ramping-up' chi_list."""
+def full_diag_effH(effH, theta_guess, keep_sector=True):
+    """Perform an exact diagonalization of `effH`."""
+
+# Module: tenpy.algorithms.dmrg_parallel
+
+
+class TwoSiteHThreadPlusHC:
+    """Version of `TwoSiteH` that parallelizes matvec with threads."""
+    def __init__(self, plus_hc_worker=None, *args, **kwargs): pass
+    def matvec(self, theta): pass
+    def matvec_hc(self, theta): pass
+    def to_matrix(self): pass
+    def adjoint(self): pass
+
+class DMRGThreadPlusHC:
+    def __init__(self, psi, model, options, **kwargs): pass
+    def make_eff_H(self): pass
+    def run(self): pass
+
+# Module: tenpy.algorithms.tebd
+
+
+class TEBDEngine:
+    """Time Evolving Block Decimation (TEBD) algorithm."""
+    def __init__(self, psi, model, options, **kwargs): pass
+    def trunc_err_bonds(self):
+        """Truncation error introduced on each non-trivial bond."""
+    def run_GS(self):
+        """TEBD algorithm in imaginary time to find the ground state."""
+    def suzuki_trotter_time_steps(order):
+        """Return time steps of U for the Suzuki Trotter decomposition of desired order."""
+    def suzuki_trotter_decomposition(order, N_steps):
+        """Returns list of necessary steps for the suzuki trotter decomposition."""
+    def prepare_evolve(self, dt): pass
+    def calc_U(self, order, delta_t, type_evo='real', E_offset=None):
+        """Calculate ``self.U_bond`` from ``self.model.H_bond``."""
+    def evolve(self, N_steps, dt):
+        """Evolve by ``dt * N_steps``."""
+    def evolve_step(self, U_idx_dt, odd):
+        """Updates either even *or* odd bonds in unit cell."""
+    def update_bond(self, i, U_bond):
+        """Updates the B matrices on a given bond."""
+    def update_imag(self, N_steps, call_canonical_form=True):
+        """Perform an update suitable for imaginary time evolution."""
+    def update_bond_imag(self, i, U_bond):
+        """Update a bond with a (possibly non-unitary) `U_bond`."""
+
+class QRBasedTEBDEngine:
+    """Version of TEBD that relies on QR decompositions rather than SVD."""
+    def update_bond(self, i, U_bond): pass
+    def update_bond_imag(self, i, U_bond): pass
+
+class RandomUnitaryEvolution:
+    """Evolution of an MPS with random two-site unitaries in a TEBD-like fashion."""
+    def __init__(self, psi, options, **kwargs): pass
+    def run(self):
+        """Time evolution with TEBD and random two-site unitaries (possibly conserving charges)."""
+    def prepare_evolve(self, dt):
+        """Do nothing, as we call :meth:`calc_U` directly in :meth:`update`."""
+    def calc_U(self):
+        """Draw new random two-site unitaries replacing the usual `U` of TEBD."""
+    def evolve(self, N_steps, dt):
+        """Apply ``N_steps`` random two-site unitaries to each bond (in even-odd pattern)."""
+
+class TimeDependentTEBD:
+    """Variant of :class:`TEBDEngine` that can handle time-dependent Hamiltonians."""
+
+# Module: tenpy.algorithms.algorithm
+
+
+class Algorithm:
+    """Base class and common interface for a tensor-network based algorithm in TeNPy."""
+    def __init__(self, psi, model, options, resume_data=None, cache=None): pass
+    def switch_engine(cls, other_engine, options=None, **kwargs):
+        """Initialize algorithm from another algorithm instance of a different class."""
+    def run(self):
+        """Actually run the algorithm."""
+    def resume_run(self):
+        """Resume a run that was interrupted."""
+    def get_resume_data(self, sequential_simulations=False):
+        """Return necessary data to resume a :meth:`run` interrupted at a checkpoint."""
+    def estimate_RAM(self, mem_saving_factor=None):
+        """Gives an approximate prediction for the required memory usage."""
+
+class TimeEvolutionAlgorithm:
+    """Common interface for (real) time evolution algorithms."""
+    def __init__(self, psi, model, options, **kwargs): pass
+    def get_resume_data(self, sequential_simulations=False): pass
+    def run(self):
+        """Perform a (real-)time evolution of :attr:`psi` by `N_steps` * `dt`."""
+    def run_evolution(self, N_steps, dt):
+        """Perform a (real-)time evolution of :attr:`psi` by `N_steps` * `dt`."""
+    def prepare_evolve(self, dt):
+        """Prepare an evolution step."""
+    def evolve(self, N_steps, dt):
+        """Evolve by N_steps*dt."""
+    def evolve_step(self, dt): pass
+
+class TimeDependentHAlgorithm:
+    """Time evolution under a time dependent Hamiltonian."""
+    def __init__(self, psi, model, options, **kwargs): pass
+    def run_evolution(self, N_steps, dt):
+        """Run the time evolution for N_steps * dt."""
+    def reinit_model(self):
+        """Re-initialize a new :attr:`model` at current :attr:`evolved_time`."""
+
+# Module: tenpy.algorithms.network_contractor
+
+def ncon(tensor_list, leg_links, sequence=None):
+    """Implementation of ``ncon.m`` for TeNPy Arrays."""
+def contract(tensor_list, tensor_names=None, leg_contractions=None, open_legs=None, sequence=None):
+    """Contract a network of tensors."""
+
+# Module: tenpy.algorithms.purification
+
+
+class PurificationTwoSiteU:
+    """Variant of `TwoSiteH` suitable for purification."""
+    def combine_Heff(self): pass
+
+class PurificationApplyMPO:
+    """Variant of `VariationalApplyMPO` suitable for purification."""
+    def update_local(self, _, optimize=True):
+        """Perform local update."""
+    def update_new_psi(self, theta): pass
+
+class PurificationTEBD:
+    """Time evolving block decimation (TEBD) for purification MPS."""
+    def __init__(self, psi, model, options, **kwargs): pass
+    def run_imaginary(self, beta):
+        """Run imaginary time evolution to cool down by the given `beta`."""
+    def disent_iterations(self):
+        """For each bond the total number of iterations performed in any Disentangler."""
+    def calc_U(self, order, delta_t, type_evo='real', E_offset=None):
+        """See :meth:`~tenpy.algorithms.tebd.eng.calc_U`"""
+    def update_bond(self, i, U_bond):
+        """Updates the B matrices on a given bond."""
+    def update_bond_imag(self, i, U_bond):
+        """Update a bond with a (possibly non-unitary) `U_bond`."""
+    def disentangle(self, theta):
+        """Disentangle `theta` before splitting with svd."""
+    def disentangle_global(self, pair=None):
+        """Try global disentangling by determining the maximally entangled pairs of sites."""
+    def disentangle_global_nsite(self, n=2):
+        """Perform a sweep through the system and disentangle with :meth:`disentangle_n_site`."""
+    def disentangle_n_site(self, i, n, theta):
+        """Generalization of :meth:`disentangle` to `n` sites."""
+
+class PurificationTEBD2:
+    """Similar as PurificationTEBD, but perform sweeps instead of brickwall."""
+    def update(self, N_steps):
+        """Evolve by ``N_steps * U_param['dt']``."""
+    def update_step(self, U_idx_dt, odd):
+        """Updates bonds in unit cell."""
+
+# Module: tenpy.algorithms.mpo_evolution
+
+
+class ExpMPOEvolution:
+    """Time evolution of an MPS using the W_I or W_II approximation for ``exp(H dt)``."""
+    def __init__(self, psi, model, options, **kwargs): pass
+    def prepare_evolve(self, dt): pass
+    def calc_U(self, dt, order=2, approximation='II'):
+        """Calculate ``self._U_MPO``."""
+    def evolve_step(self, dt): pass
+
+class TimeDependentExpMPOEvolution:
+    """Variant of :class:`ExpMPOEvolution` that can handle time-dependent hamiltonians."""
+
+# Module: tenpy.algorithms.tdvp
+
+
+class TDVPEngine:
+    """Time dependent variational principle algorithm for MPS."""
+    def __init__(self, psi, model, options, **kwargs): pass
+    def lanczos_options(self):
+        """Deprecated alias of :attr:`lanczos_params`."""
+    def prepare_evolve(self, dt):
+        """Expand the basis using Krylov or random vectors using the algorithm from :cite:`yang2020`."""
+    def evolve(self, N_steps, dt):
+        """Evolve by ``N_steps * dt``."""
+
+class TwoSiteTDVPEngine:
+    """Engine for the two-site TDVP algorithm."""
+    def __init__(self, psi, model, options, **kwargs): pass
+    def get_sweep_schedule(self):
+        """Slightly different sweep schedule than DMRG"""
+    def update_local(self, theta, **kwargs): pass
+    def update_env(self, **update_data):
+        """Do nothing; super().update_env() is called explicitly in :meth:`update_local`."""
+    def one_site_update(self, i, dt): pass
+
+class SingleSiteTDVPEngine:
+    """Engine for the single-site TDVP algorithm."""
+    def get_sweep_schedule(self):
+        """Slightly different sweep schedule than DMRG"""
+    def update_local(self, theta, **kwargs): pass
+    def right_moving_update(self, i0, theta): pass
+    def left_moving_update(self, i0, theta): pass
+    def update_env(self, **update_data):
+        """Do nothing; super().update_env() is called explicitly in :meth:`update_local`."""
+    def zero_site_update(self, i, theta, dt):
+        """Zero-site update on the left of site `i`."""
+    def post_update_local(self, **update_data): pass
+
+class TimeDependentSingleSiteTDVP:
+    """Variant of :class:`SingleSiteTDVPEngine` that can handle time-dependent Hamiltonians."""
+    def reinit_model(self): pass
+
+class TimeDependentTwoSiteTDVP:
+    """Variant of :class:`TwoSiteTDVPEngine` that can handle time-dependent Hamiltonians."""
+    def reinit_model(self): pass

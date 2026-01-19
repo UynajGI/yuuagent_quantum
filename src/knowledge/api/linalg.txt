@@ -1,0 +1,498 @@
+# Module: tenpy.linalg.krylov_based
+
+
+class KrylovBased:
+    """Base class for iterative algorithms building a Krylov basis with np_conserved arrays."""
+    def __init__(self, H, psi0, options): pass
+    def run(self): pass
+    def iscale_prefactor(self, w, scale): pass
+    def iadd_prefactor_other(self, w, alpha, v): pass
+
+class GMRES:
+    def __init__(self, A, x, b, options): pass
+    def run(self): pass
+    def arnoldi(self, k): pass
+    def apply_givens_rotation(self, k): pass
+    def givens_rotation(self, k): pass
+    def backsolve(self, k): pass
+    def reset(self): pass
+
+class Arnoldi:
+    """Arnoldi method for diagonalizing square, non-hermitian/symmetric matrices."""
+    def __init__(self, H, psi0, options): pass
+    def run(self):
+        """Find the ground state of self.H."""
+
+class LanczosGroundState:
+    """Lanczos algorithm to find the ground state."""
+    def __init__(self, H, psi0, options): pass
+    def run(self):
+        """Find the ground state of H."""
+
+class LanczosEvolution:
+    """Calculate :math:`exp(delta H) |psi0>` using Lanczos."""
+    def __init__(self, H, psi0, options): pass
+    def run(self, delta, normalize=None):
+        """Calculate ``expm(delta H).dot(psi0)`` using Lanczos."""
+def lanczos_arpack(H, psi, options={}):
+    """Use :func:`scipy.sparse.linalg.eigsh` to find the ground state of `H`."""
+def gram_schmidt(vecs, rcond=1e-14):
+    """In place Gram-Schmidt Orthogonalization and normalization for npc Arrays."""
+def iscale_prefactor(w, scale): pass
+def iadd_prefactor_other(w, alpha, v): pass
+def plot_stats(ax, Es):
+    """Plot the convergence of the energies."""
+
+# Module: tenpy.linalg.sparse
+
+
+class NpcLinearOperator:
+    """Prototype for a Linear Operator acting on :class:`~tenpy.linalg.np_conserved.Array`."""
+    def matvec(self, vec):
+        """Calculate the action of the operator on a vector `vec`."""
+    def to_matrix(self):
+        """Contract `self` to a matrix."""
+    def adjoint(self):
+        """Return the hermitian conjugate of `self`"""
+
+class NpcLinearOperatorWrapper:
+    """Base class for wrapping around another :class:`NpcLinearOperator`."""
+    def __init__(self, orig_operator): pass
+    def unwrapped(self):
+        """Return to the original NpcLinearOperator."""
+    def to_matrix(self):
+        """Contract `self` to a matrix."""
+    def adjoint(self):
+        """Return the hermitian conjugate of `self`."""
+
+class SumNpcLinearOperator:
+    """Sum of two linear operators."""
+    def __init__(self, orig_operator, other_operator): pass
+    def matvec(self, vec): pass
+    def to_matrix(self): pass
+    def adjoint(self): pass
+
+class ShiftNpcLinearOperator:
+    """Represents ``original_operator + shift * identity``."""
+    def __init__(self, orig_operator, shift): pass
+    def matvec(self, vec): pass
+    def to_matrix(self): pass
+    def adjoint(self): pass
+
+class BoostNpcLinearOperator:
+    """Represents ``original_operator + shift_i * |vec_i><vec_i|``."""
+    def __init__(self, orig_operator, boosts, boost_vecs): pass
+    def matvec(self, vec): pass
+    def to_matrix(self): pass
+    def adjoint(self): pass
+
+class OrthogonalNpcLinearOperator:
+    """Replace ``H -> P H P`` with the projector ``P = 1 - sum_o |o> <o|``."""
+    def __init__(self, orig_operator, ortho_vecs): pass
+    def matvec(self, vec): pass
+    def to_matrix(self): pass
+    def adjoint(self): pass
+
+class FlatLinearOperator:
+    """Square Linear operator acting on numpy arrays based on a `matvec` acting on npc Arrays."""
+    def __init__(self, npc_matvec, leg, dtype, charge_sector=0, vec_label=None, compact_flat=None): pass
+    def from_NpcArray(cls, mat, charge_sector=0, compact_flat=None):
+        """Create a `FlatLinearOperator` from a square :class:`~tenpy.linalg.np_conserved.Array`."""
+    def from_guess_with_pipe(cls, npc_matvec, v0_guess, labels_split=None, dtype=None, compact_flat=True):
+        """Create a `FlatLinearOperator`` from a `matvec` function acting on multiple legs."""
+    def charge_sector(self):
+        """Charge sector of the vector which is acted on."""
+    def charge_sector(self, value): pass
+    def flat_to_npc(self, vec):
+        """Convert flat numpy vector of selected charge sector into npc Array."""
+    def npc_to_flat(self, npc_vec):
+        """Convert npc Array into a 1D ndarray, inverse of :meth:`flat_to_npc`."""
+    def flat_to_npc_None_sector(self, vec, cutoff=1e-10):
+        """Convert flat vector of undetermined charge sectors into npc Array."""
+    def eigenvectors(self, num_ev=1, max_num_ev=None, max_tol=1e-12, which='LM', v0=None, v0_npc=None, cutoff=1e-10, hermitian=False, **kwargs):
+        """Find (dominant) eigenvector(s) of self using :func:`scipy.sparse.linalg.eigs`."""
+
+class FlatHermitianOperator:
+    """Hermitian variant of :class:`FlatLinearOperator`."""
+    def eigenvectors(self, *args, **kwargs):
+        """Same as FlatLinearOperator(..., hermitian=True)."""
+
+# Module: tenpy.linalg.svd_robust
+
+def svd(a, full_matrices=True, compute_uv=True, overwrite_a=False, check_finite=True, lapack_driver='gesdd', warn=True):
+    """Wrapper around :func:`scipy.linalg.svd` with `gesvd` backup plan."""
+
+# Module: tenpy.linalg.np_conserved
+
+
+class Array:
+    """A multidimensional array (=tensor) for using charge conservation."""
+    def __init__(self, legcharges, dtype=np.float64, qtotal=None, labels=None):
+        """See help(self)"""
+    def test_sanity(self):
+        """Sanity check."""
+    def copy(self, deep=True):
+        """Return a (deep or shallow) copy of self."""
+    def save_hdf5(self, hdf5_saver, h5gr, subpath):
+        """Export `self` into a HDF5 file."""
+    def from_hdf5(cls, hdf5_loader, h5gr, subpath):
+        """Load instance from a HDF5 file."""
+    def from_ndarray_trivial(cls, data_flat, dtype=None, labels=None):
+        """Convert a flat numpy ndarray to an Array with trivial charge conservation."""
+    def from_ndarray(cls, data_flat, legcharges, dtype=None, qtotal=None, cutoff=None, labels=None, raise_wrong_sector=True, warn_wrong_sector=True):
+        """Convert a flat (numpy) ndarray to an Array."""
+    def from_func(cls, func, legcharges, dtype=None, qtotal=None, func_args=(), func_kwargs={}, shape_kw=None, labels=None):
+        """Create an Array from a numpy func."""
+    def from_func_square(cls, func, leg, dtype=None, func_args=(), func_kwargs={}, shape_kw=None, labels=None):
+        """Create an Array from a (numpy) function."""
+    def zeros_like(self):
+        """Return a copy of self with only zeros as entries, containing no `_data`."""
+    def size(self):
+        """The number of dtype-objects stored."""
+    def stored_blocks(self):
+        """The number of (non-zero) blocks stored in :attr:`_data`."""
+    def ndim(self):
+        """Alias for :attr:`rank` or ``len(self.shape)``."""
+    def get_leg_index(self, label):
+        """Translate a leg-index or leg-label to a leg-index."""
+    def get_leg_indices(self, labels):
+        """Translate a list of leg-indices or leg-labels to leg indices."""
+    def iset_leg_labels(self, labels):
+        """Set labels for the different axes/legs; in place."""
+    def get_leg_labels(self):
+        """Return list of the leg labels, with `None` for anonymous legs."""
+    def has_label(self, label):
+        """Check whether a given label exists."""
+    def get_leg(self, label):
+        """Return ``self.legs[self.get_leg_index(label)]``."""
+    def ireplace_label(self, old_label, new_label):
+        """Replace the leg label `old_label` with `new_label`; in place."""
+    def replace_label(self, old_label, new_label):
+        """Return a shallow copy with the leg label `old_label` replaced by `new_label`."""
+    def ireplace_labels(self, old_labels, new_labels):
+        """Replace leg label ``old_labels[i]`` with ``new_labels[i]``; in place."""
+    def replace_labels(self, old_labels, new_labels):
+        """Return a shallow copy with ``old_labels[i]`` replaced by ``new_labels[i]``."""
+    def idrop_labels(self, old_labels=None):
+        """Remove leg labels from self; in place."""
+    def sparse_stats(self):
+        """Returns a string detailing the sparse statistics."""
+    def to_ndarray(self):
+        """Convert self to a dense numpy ndarray."""
+    def get_block(self, qindices, insert=False):
+        """Return the ndarray in ``_data`` representing the block corresponding to `qindices`."""
+    def take_slice(self, indices, axes):
+        """Return a copy of self fixing `indices` along one or multiple `axes`."""
+    def add_trivial_leg(self, axis=0, label=None, qconj=1):
+        """Add a trivial leg (with just one entry) to `self`."""
+    def add_leg(self, leg, i, axis=0, label=None):
+        """Add a leg to `self`, setting the current array as slice for a given index."""
+    def extend(self, axis, extra):
+        """Increase the dimension of a given axis, filling the values with zeros."""
+    def gauge_total_charge(self, axis, newqtotal=None, new_qconj=None):
+        """Changes the total charge by adjusting the charge on a certain leg."""
+    def add_charge(self, add_legs, chinfo=None, qtotal=None):
+        """Add charges."""
+    def drop_charge(self, charge=None, chinfo=None):
+        """Drop (one of) the charges."""
+    def change_charge(self, charge, new_qmod, new_name='', chinfo=None):
+        """Change the `qmod` of one charge in `chinfo`."""
+    def is_completely_blocked(self):
+        """Return bool whether all legs are blocked by charge."""
+    def sort_legcharge(self, sort=True, bunch=True):
+        """Return a copy with one or all legs sorted by charges."""
+    def isort_qdata(self):
+        """(Lexicographically) sort ``self._qdata``; in place."""
+    def apply_charge_mapping(self, map_func, func_args=(), func_kwargs={}, inplace: bool=False):
+        """Apply a mapping to the charges of all legs and to qtotal."""
+    def shift_charges(self, dx, inplace: bool=False):
+        """Map all leg-charges and the qtotal with :meth:`ChargeInfo.shift_charges`."""
+    def shift_charges_horizontal(self, dx_0: int, inplace: bool=False):
+        """Map all leg-charged and the qtotal with :meth:`ChargeInfo.shift_charges_horizontal`."""
+    def make_pipe(self, axes, **kwargs):
+        """Generates a :class:`~tenpy.linalg.charges.LegPipe` for specified axes."""
+    def combine_legs(self, combine_legs, new_axes=None, pipes=None, qconj=None):
+        """Reshape: combine multiple legs into multiple pipes. If necessary, transpose before."""
+    def split_legs(self, axes=None, cutoff=0.0):
+        """Reshape: opposite of combine_legs: split (some) legs which are LegPipes."""
+    def as_completely_blocked(self):
+        """Gives a version of self which is completely blocked by charges."""
+    def squeeze(self, axes=None):
+        """Remove single-dimensional legs, like :func:`np.squeeze`."""
+    def astype(self, dtype, copy=True):
+        """Return copy with new dtype, upcasting all blocks in ``_data``."""
+    def ipurge_zeros(self, cutoff=QCUTOFF, norm_order=None):
+        """Removes ``self._data`` blocks with *norm* less than cutoff; in place."""
+    def iproject(self, mask, axes):
+        """Applying masks to one or multiple axes; in place."""
+    def permute(self, perm, axis):
+        """Apply a permutation in the indices of an axis."""
+    def itranspose(self, axes=None):
+        """Transpose axes like `np.transpose`; in place."""
+    def transpose(self, axes=None):
+        """Like :meth:`itranspose`, but on a deep copy."""
+    def iswapaxes(self, axis1, axis2):
+        """Similar as ``np.swapaxes``; in place."""
+    def iscale_axis(self, s, axis=-1):
+        """Scale with varying values along an axis; in place."""
+    def scale_axis(self, s, axis=-1):
+        """Same as :meth:`iscale_axis`, but return a (deep) copy."""
+    def iunary_blockwise(self, func, *args, **kwargs):
+        """Roughly ``self = f(self)``, block-wise; in place."""
+    def unary_blockwise(self, func, *args, **kwargs):
+        """Roughly ``return func(self)``, block-wise. Copies."""
+    def iconj(self, complex_conj=True):
+        """Wrapper around :meth:`self.conj` with ``inplace=True``."""
+    def conj(self, complex_conj=True, inplace=False):
+        """Conjugate: complex conjugate data, conjugate charge data."""
+    def complex_conj(self):
+        """Return copy which is complex conjugated *without* conjugating the charge data."""
+    def norm(self, ord=None, convert_to_float=True):
+        """Norm of flattened data."""
+    def ibinary_blockwise(self, func, other, *args, **kwargs):
+        """Roughly ``self = func(self, other)``, block-wise; in place."""
+    def binary_blockwise(self, func, other, *args, **kwargs):
+        """Roughly ``return func(self, other)``, block-wise. Copies."""
+    def matvec(self, other):
+        """This function is used by the Lanczos algorithm needed for DMRG."""
+    def iadd_prefactor_other(self, prefactor, other):
+        """``self += prefactor * other`` for scalar `prefactor` and :class:`Array` `other`."""
+    def iscale_prefactor(self, prefactor):
+        """``self *= prefactor`` for scalar `prefactor`."""
+def zeros(legcharges, dtype=np.float64, qtotal=None, labels=None):
+    """Create a npc array full of zeros (with no _data)."""
+def ones(legcharges, dtype=np.float64, qtotal=None, labels=None):
+    """Short-hand for :meth:`Array.from_func` with function :func:`numpy.ones`."""
+def eye_like(a, axis=0, labels=None):
+    """Return an identity matrix contractible with the leg `axis` of the :class:`Array` `a`."""
+def diag(s, leg, dtype=None, labels=None):
+    """Returns a square, diagonal matrix of entries `s`."""
+def concatenate(arrays, axis=0, copy=True):
+    """Stack arrays along a given axis, similar as np.concatenate."""
+def grid_concat(grid, axes, copy=True):
+    """Given an np.array of npc.Arrays, performs a multi-dimensional concatenation along 'axes'."""
+def grid_outer(grid, grid_legs, qtotal=None, grid_labels=None):
+    """Given an np.array of npc.Arrays, return the corresponding higher-dimensional Array."""
+def detect_grid_outer_legcharge(grid, grid_legs, qtotal=None, qconj=1, bunch=False):
+    """Derive a LegCharge for a grid used for :func:`grid_outer`."""
+def detect_qtotal(flat_array, legcharges, cutoff=None):
+    """Returns the total charge (w.r.t `legs`) of the sector with largest entry in `flat_array`."""
+def detect_legcharge(flat_array, chargeinfo, legcharges, qtotal=None, qconj=+1, cutoff=None):
+    """Calculate a missing `LegCharge` by looking for nonzero entries of a flat array."""
+def trace(a, leg1=0, leg2=1):
+    """Trace of `a`, summing over leg1 and leg2."""
+def outer(a, b):
+    """Forms the outer tensor product, equivalent to ``tensordot(a, b, axes=0)``."""
+def inner(a, b, axes='labels', do_conj=False):
+    """Contract all legs in `a` and `b`, return scalar."""
+def tensordot(a, b, axes=2):
+    """Similar as ``np.tensordot`` but for :class:`Array`."""
+def svd(a, full_matrices=False, compute_uv=True, cutoff=None, qtotal_LR=[None, None], inner_labels=[None, None], inner_qconj=+1):
+    """Singular value decomposition of an Array `a`."""
+def polar(a, cutoff=1e-16, left=False, inner_labels=[None, None]):
+    """Polar decomposition of an Array `a`."""
+def pinv(a, cutoff=1e-15):
+    """Compute the (Moore-Penrose) pseudo-inverse of a matrix."""
+def norm(a, ord=None, convert_to_float=True):
+    """Norm of flattened data."""
+def eigh(a, UPLO='L', sort=None):
+    """Calculate eigenvalues and eigenvectors for a hermitian matrix."""
+def eig(a, sort=None):
+    """Calculate eigenvalues and eigenvectors for a non-hermitian matrix."""
+def eigvalsh(a, UPLO='L', sort=None):
+    """Calculate eigenvalues for a hermitian matrix."""
+def eigvals(a, sort=None):
+    """Calculate eigenvalues for a hermitian matrix."""
+def speigs(a, charge_sector, k, *args, **kwargs):
+    """Sparse eigenvalue decomposition ``w, v`` of square `a` in a given charge sector."""
+def expm(a):
+    """Use scipy.linalg.expm to calculate the matrix exponential of a square matrix."""
+def qr(a, mode='reduced', inner_labels=[None, None], cutoff=None, pos_diag_R=False, qtotal_Q=None, inner_qconj=+1):
+    """Q-R decomposition of a matrix."""
+def lq(a, mode='reduced', inner_labels=[None, None], cutoff=None, pos_diag_L=False, qtotal_Q=None, inner_qconj=+1):
+    """Q-R decomposition of a matrix. See documentation for :meth:`qr` for details."""
+def orthogonal_columns(a, new_label=None):
+    """Find orthogonal columns for a given matrix."""
+def to_iterable_arrays(array_list):
+    """Similar as :func:`~tenpy.tools.misc.to_iterable`, but also enclose npc Arrays in a list."""
+
+# Module: tenpy.linalg.charges
+
+
+class ChargeInfo:
+    """Meta-data about the charge of a tensor."""
+    def __init__(self, mod=[], names=None): pass
+    def save_hdf5(self, hdf5_saver, h5gr, subpath):
+        """Export `self` into a HDF5 file."""
+    def from_hdf5(cls, hdf5_loader, h5gr, subpath):
+        """Load instance from a HDF5 file."""
+    def add(cls, chinfos):
+        """Create a :class:`ChargeInfo` combining multiple charges."""
+    def drop(cls, chinfo, charge=None):
+        """Remove a charge from a :class:`ChargeInfo`."""
+    def change(cls, chinfo, charge, new_qmod, new_name=''):
+        """Change the `qmod` of a given charge."""
+    def test_sanity(self):
+        """Sanity check, raises ValueErrors, if something is wrong."""
+    def qnumber(self):
+        """The number of charges."""
+    def mod(self):
+        """Modulo how much each of the charges is taken."""
+    def make_valid(self, charges=None):
+        """Take charges modulo self.mod."""
+    def check_valid(self, charges):
+        """Check, if `charges` has all entries as expected from self.mod."""
+    def shift_charges(self, charges, dx):
+        """Spatial translation acting on charges."""
+    def shift_charges_horizontal(self, charges, dx_0):
+        """Like :meth:`shift_charges`, but restricted to the first dimension."""
+
+class DipolarChargeInfo:
+    """Version of :class:`ChargeInfo` that supports dipole conservation."""
+    def __init__(self, mod=[], names=None, charge_idcs=[], dipole_idcs=[], dipole_dims=None): pass
+    def shift_charges(self, charges, dx): pass
+    def shift_charges_horizontal(self, charges, dx_0): pass
+    def save_hdf5(self, hdf5_saver, h5gr, subpath): pass
+    def from_hdf5(cls, hdf5_loader, h5gr, subpath): pass
+    def test_sanity(self): pass
+
+class LegCharge:
+    """Save the charge data associated to a leg of a tensor."""
+    def __init__(self, chargeinfo, slices, charges, qconj=1): pass
+    def copy(self):
+        """Return a (shallow) copy of self."""
+    def save_hdf5(self, hdf5_saver, h5gr, subpath):
+        """Export `self` into a HDF5 file."""
+    def from_hdf5(cls, hdf5_loader, h5gr, subpath):
+        """Load instance from a HDF5 file."""
+    def from_trivial(cls, ind_len, chargeinfo=None, qconj=1):
+        """Create trivial (qnumber=0) LegCharge for given len of indices `ind_len`."""
+    def from_qflat(cls, chargeinfo, qflat, qconj=1):
+        """Create a LegCharge from qflat form."""
+    def from_qind(cls, chargeinfo, slices, charges, qconj=1):
+        """Just a wrapper around self.__init__(), see class doc-string for parameters."""
+    def from_qdict(cls, chargeinfo, qdict, qconj=1):
+        """Create a LegCharge from qdict form."""
+    def from_add_charge(cls, legs, chargeinfo=None):
+        """Add the (independent) charges of two or more legs to get larger `qnumber`."""
+    def from_drop_charge(cls, leg, charge=None, chargeinfo=None):
+        """Remove a charge from a LegCharge."""
+    def from_change_charge(cls, leg, charge, new_qmod, new_name='', chargeinfo=None):
+        """Remove a charge from a LegCharge."""
+    def test_sanity(self):
+        """Sanity check, raises ValueErrors, if something is wrong."""
+    def conj(self):
+        """Return a (shallow) copy with opposite ``self.qconj``."""
+    def flip_charges_qconj(self):
+        """Return a copy with both negative `qconj` and `charges`."""
+    def apply_charge_mapping(self, map_func, func_args=(), func_kwargs={}):
+        """Apply mapping to :attr:`LegCharge.charges`."""
+    def to_qflat(self):
+        """Return charges in `qflat` form."""
+    def to_qdict(self):
+        """Return charges in `qdict` form."""
+    def is_blocked(self):
+        """Returns whether self is blocked, i.e. qindex map 1:1 to charge values."""
+    def is_sorted(self):
+        """Returns whether `self.charges` is sorted lexicographically."""
+    def is_bunched(self):
+        """Checks whether :meth:`bunch` would change something."""
+    def test_contractible(self, other):
+        """Raises a ValueError if charges are incompatible for contraction with other."""
+    def test_equal(self, other):
+        """Test if charges are *equal* including `qconj`."""
+    def get_block_sizes(self):
+        """Return the sizes of the individual blocks."""
+    def get_slice(self, qindex):
+        """Return slice selecting the block for a given `qindex`."""
+    def get_qindex(self, flat_index):
+        """Find qindex containing a flat index."""
+    def get_qindex_of_charges(self, charges):
+        """Return the slice selecting the block for given charge values."""
+    def get_charge(self, qindex):
+        """Return charge ``self.charges[qindex] * self.qconj`` for a given `qindex`."""
+    def sort(self, bunch=True):
+        """Return a copy of `self` sorted by charges (but maybe not bunched)."""
+    def bunch(self):
+        """Return a copy with bunched self.charges: form blocks for contiguous equal charges."""
+    def project(self, mask):
+        """Return copy keeping only the indices specified by `mask`."""
+    def extend(self, extra):
+        """Return a new :class:`LegCharge`, which extends self with further charges."""
+    def charge_sectors(self):
+        """Return unique rows of self.charges."""
+    def perm_flat_from_perm_qind(self, perm_qind):
+        """Convert a permutation of qind (acting on self) into a flat permutation."""
+    def perm_qind_from_perm_flat(self, perm_flat):
+        """Convert flat permutation into qind permutation."""
+
+class LegPipe:
+    """A `LegPipe` combines multiple legs of a tensor to one."""
+    def __init__(self, legs, qconj=1, sort=True, bunch=True): pass
+    def copy(self):
+        """Return a (shallow) copy of self."""
+    def save_hdf5(self, hdf5_saver, h5gr, subpath):
+        """Export `self` into a HDF5 file."""
+    def from_hdf5(cls, hdf5_loader, h5gr, subpath):
+        """Load instance from a HDF5 file."""
+    def test_sanity(self):
+        """Sanity check, raises ValueErrors, if something is wrong."""
+    def to_LegCharge(self):
+        """Convert self to a LegCharge, discarding the information how to split the legs."""
+    def apply_charge_mapping(self, map_func, func_args=(), func_kwargs={}): pass
+    def conj(self):
+        """Return a shallow copy with opposite ``self.qconj``."""
+    def outer_conj(self):
+        """Like :meth:`conj`, but don't change ``qconj`` for incoming legs."""
+    def sort(self, *args, **kwargs):
+        """Convert to LegCharge and call :meth:`LegCharge.sort`."""
+    def bunch(self, *args, **kwargs):
+        """Convert to LegCharge and call :meth:`LegCharge.bunch`."""
+    def project(self, *args, **kwargs):
+        """Convert self to LegCharge and call :meth:`LegCharge.project`."""
+    def map_incoming_flat(self, incoming_indices):
+        """Map (flat) incoming indices to an index in the outgoing pipe."""
+
+# Module: tenpy.linalg.truncation
+
+
+class TruncationError:
+    """Class representing a truncation error."""
+    def __init__(self, eps=0.0, ov=1.0): pass
+    def copy(self):
+        """Return a copy of self."""
+    def from_norm(cls, norm_new, norm_old=1.0):
+        """Construct TruncationError from norm after and before the truncation."""
+    def from_S(cls, S_discarded, norm_old=None):
+        """Construct TruncationError from discarded singular values."""
+    def ov_err(self):
+        """Error ``1.-ov`` of the overlap with the correct state."""
+def truncate(S, options):
+    """Given a Schmidt spectrum `S`, determine which values to keep."""
+def svd_theta(theta, trunc_par, qtotal_LR=[None, None], inner_labels=['vR', 'vL']):
+    """Performs SVD of a matrix `theta` (= the wavefunction) and truncates it."""
+def eigh_rho(rho, trunc_par, UPLO='L', sort=None):
+    """Performs EIG of a hermitian matrix `rho` (= density matrix) and truncates it."""
+def decompose_theta_qr_based(old_qtotal_L, old_qtotal_R, old_bond_leg, theta: npc.Array, move_right: bool, expand: float, min_block_increase: int, use_eig_based_svd: bool, trunc_params: dict, compute_err: bool, return_both_T: bool):
+    """Performs a QR based decomposition of a matrix `theta` (= the wavefunction) and truncates it."""
+
+# Module: tenpy.linalg.random_matrix
+
+def box(size, W=1.0):
+    """Return random number uniform in (-W, W]."""
+def standard_normal_complex(size):
+    """Return ``(R + 1.j*I)`` for independent `R` and `I` from np.random.standard_normal."""
+def GOE(size):
+    """Gaussian orthogonal ensemble (GOE)."""
+def GUE(size):
+    """Gaussian unitary ensemble (GUE)."""
+def CRE(size):
+    """Circular real ensemble (CRE)."""
+def COE(size):
+    """Circular orthogonal ensemble (COE)."""
+def CUE(size):
+    """Circular unitary ensemble (CUE)."""
+def O_close_1(size, a=0.01):
+    """Return an random orthogonal matrix 'close' to the Identity."""
+def U_close_1(size, a=0.01):
+    """Return an random orthogonal matrix 'close' to the identity."""

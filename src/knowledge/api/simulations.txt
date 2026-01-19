@@ -1,0 +1,251 @@
+# Module: tenpy.simulations.post_processing
+
+
+class DataLoader:
+    """Post-processing class to handle IO and get Model and MPS from saved simulation data."""
+    def __init__(self, filename=None, simulation=None, data=None): pass
+    def close(self): pass
+    def measurements(self): pass
+    def get_data_m(self, key, prefix='measurements/', convert_to_numpy=True): pass
+    def get_data(self, key, prefix='', convert_to_numpy=False): pass
+    def convert_list_to_ndarray(self, value, key): pass
+    def model(self): pass
+    def get_model(self):
+        """Deprecated in favor of the simpler property access via :attr:`DataLoader.model`."""
+    def lat(self): pass
+    def BZ(self): pass
+    def psi(self): pass
+    def get_all_keys_as_dict(self): pass
+
+class DataFiles:
+    """Hold multiple DataLoader instances open, indexed by the filename."""
+    def __init__(self, files=None, folder=None): pass
+    def close(self):
+        """Close all files held open by self."""
+    def keys(self):
+        """Return paths of the files opened."""
+    def values(self):
+        """Return iterator over the :class:`DataLoader` instances."""
+    def items(self): pass
+    def load_from_folder(self, folder, glob='*.h5'):
+        """Load all data files from a given folder."""
+def pp_spectral_function(DL: DataLoader, correlation_key, conjugate_correlation=False, **kwargs):
+    """Given a time dependent correlation function C(t, r), calculate its Spectral Function."""
+def pp_plot_correlations_on_lattice(DL: DataLoader, data_key, t_step=0, keys='nearest_neighbors', default_dir: str='plots', save_as: str='Correlations.pdf', markers='D', figsize=(8, 8), **kwargs):
+    """Save a plot during post-processing to plot correlations on a lattice."""
+
+# Module: tenpy.simulations.time_evolution
+
+
+class RealTimeEvolution:
+    """Perform a real-time evolution on a tensor network state."""
+    def __init__(self, options, **kwargs): pass
+    def run_algorithm(self):
+        """Run the algorithm."""
+    def perform_measurements(self): pass
+    def resume_run_algorithm(self): pass
+    def final_measurements(self):
+        """Do nothing."""
+    def eps_error(self):
+        """Accumulated eps error since the start of the time-evolution."""
+    def ov_error(self):
+        """Total ov error of the time-evolution."""
+
+class TimeDependentCorrelation:
+    """Specialized :class:`RealTimeEvolution` to calculate a time dependent correlation function of a ground state."""
+    def __init__(self, options, ground_state_data=None, ground_state_filename=None, **kwargs): pass
+    def resume_run(self): pass
+    def get_resume_data(self): pass
+    def init_measurements(self): pass
+    def init_state(self): pass
+    def init_algorithm(self, **kwargs): pass
+    def apply_operator_t0_to_psi(self): pass
+    def m_correlation_function(self, results, psi, model, simulation, **kwargs):
+        """Measurement function for time dependent correlations."""
+
+class TimeDependentCorrelationEvolveBraKet:
+    """Evolving the bra and ket state in :class:`TimeDependentCorrelation`."""
+    def __init__(self, *args, **kwargs): pass
+    def init_algorithm(self, **kwargs): pass
+    def run_algorithm(self): pass
+    def m_correlation_function(self, results, psi, model, simulation, **kwargs):
+        """Equivalent to :meth:`TimeDependentCorrelation.m_correlation_function`."""
+    def get_resume_data(self):
+        """Get resume data for a Simulation for two engines."""
+    def estimate_RAM(self): pass
+    def group_sites_for_algorithm(self): pass
+    def group_split(self):
+        """Split sites of psi that were grouped in  :meth:`group_sites_for_algorithm`."""
+
+class SpectralSimulation:
+    """Simulation class to calculate Spectral Functions."""
+    def __init__(self, options, ground_state_data=None, ground_state_filename=None, **kwargs): pass
+    def run_post_processing(self): pass
+
+class SpectralSimulationEvolveBraKet:
+
+# Module: tenpy.simulations.simulation
+
+
+class Simulation:
+    """Base class for simulations."""
+    def __init__(self, options, setup_logging=True, resume_data=None): pass
+    def handle_abort_signal(self, signum, frame):
+        """Handle a SIGINT signal, usually caused by a CTRL-C press."""
+    def estimate_RAM(self):
+        """Estimates the RAM usage for the simulation, without running it."""
+    def run(self):
+        """Run the whole simulation."""
+    def from_saved_checkpoint(cls, filename=None, checkpoint_results=None, **kwargs):
+        """Re-initialize a given simulation class from checkpoint results."""
+    def resume_run(self):
+        """Resume a simulation that was initialized from a checkpoint."""
+    def init_cache(self):
+        """Initialize the :attr:`cache` from the options."""
+    def init_model(self):
+        """Initialize a :attr:`model` from the model parameters."""
+    def init_state(self):
+        """Initialize a tensor network :attr:`psi`."""
+    def group_sites_for_algorithm(self):
+        """Coarse-grain the model and state for the algorithm."""
+    def group_split(self):
+        """Split sites of psi that were grouped in  :meth:`group_sites_for_algorithm`."""
+    def init_algorithm(self, **kwargs):
+        """Initialize the algorithm."""
+    def init_measurements(self):
+        """Initialize and prepare measurements."""
+    def run_algorithm(self):
+        """Run the algorithm."""
+    def resume_run_algorithm(self):
+        """Resume running the algorithm."""
+    def make_measurements(self):
+        """Perform measurements and merge the results into ``self.results['measurements']``."""
+    def perform_measurements(self):
+        """Emits the :attr:`measurement_event` to call measurement functions and collect results."""
+    def get_measurement_psi_model(self, psi, model):
+        """Get psi for measurements."""
+    def final_measurements(self):
+        """Perform a last set of measurements."""
+    def run_post_processing(self):
+        """Apply (several) post-processing steps."""
+    def get_version_info(self):
+        """Try to save version info which is necessary to allow reproducibility."""
+    def get_output_filename(self):
+        """Read out the `output_filename` from the options."""
+    def fix_output_filenames(self):
+        """Determine the output filenames."""
+    def get_backup_filename(self, output_filename):
+        """Extract the name used for backups of `output_filename`."""
+    def save_results(self, results=None):
+        """Save the :attr:`results` to an output file."""
+    def prepare_results_for_save(self):
+        """Bring the `results` into a state suitable for saving."""
+    def get_resume_data(self):
+        """Get resume data for a Simulation."""
+    def save_at_checkpoint(self, alg_engine):
+        """Save the intermediate results at the checkpoint of an algorithm."""
+    def walltime(self):
+        """Wall time evolved since initialization of the simulation class."""
+
+class Skip:
+    """Error raised if simulation output already exists."""
+    def __init__(self, msg, filename): pass
+def init_simulation(simulation_class='GroundStateSearch', simulation_class_kwargs=None, **simulation_params):
+    """Run the simulation with a simulation class."""
+def run_simulation(simulation_class='GroundStateSearch', simulation_class_kwargs=None, **simulation_params):
+    """Run the simulation with a simulation class."""
+def init_simulation_from_checkpoint(filename=None, checkpoint_results=None, update_sim_params=None, simulation_class_kwargs=None):
+    """Re-initialize a simulation from a given checkpoint without running it."""
+def resume_from_checkpoint(filename=None, checkpoint_results=None, update_sim_params=None, simulation_class_kwargs=None):
+    """Resume a simulation run from a given checkpoint."""
+def run_seq_simulations(sequential, simulation_class='GroundStateSearch', simulation_class_kwargs=None, resume_data=None, collect_results_in_memory=False, **simulation_params):
+    """Sequentially run (variational) simulations."""
+def estimate_simulation_RAM(suppress_non_RAM_output=True, RAM_output_unit=None, estimate_RAM_const_offset=(100, 'MB'), **simulation_params):
+    """Pre-simulation RAM estimate."""
+def output_filename_from_dict(options, parts={}, prefix='result', suffix='.h5', joint='_', parts_order=None, separator='.'):
+    """Format a `output_filename` from parts with values from nested `options`."""
+
+# Module: tenpy.simulations.measurement
+
+def measurement_wrapper(function, results_key, **kwargs):
+    """Decorator to transform a function into a measurement function."""
+def m_measurement_index(results, psi, model, simulation, results_key='measurement_index'):
+    """'Measure' the index of how many measurements have been performed so far."""
+def m_bond_dimension(results, psi, model, simulation, results_key='bond_dimension'):
+    """'Measure' the bond dimension of an MPS."""
+def m_bond_energies(results, psi, model, simulation, results_key='bond_energies'):
+    """Measure the energy of an MPS."""
+def m_simulation_parameter(results, psi, model, simulation, recursive_key, results_key=None, **kwargs):
+    """Dummy measurement of a simulation parameter."""
+def m_energy_MPO(results, psi, model, simulation, results_key='energy_MPO'):
+    """Measure the energy of an MPS by evaluating the MPS expectation value."""
+def m_entropy(results, psi, model, simulation, results_key='entropy'):
+    """Measure the entropy at all bonds of an MPS."""
+def m_onsite_expectation_value(results, psi, model, simulation, opname, results_key=None, fix_u=None, **kwargs):
+    """Measure expectation values of an onsite operator."""
+def m_correlation_length(results, psi, model, simulation, results_key='correlation_length', unit=None, **kwargs):
+    """Measure the correlation of an infinite MPS."""
+def m_evolved_time(results, psi, model, simulation, results_key='evolved_time'):
+    """Measure the time evolved by the engine, ``engine.evolved_time``."""
+
+# Module: tenpy.simulations.ground_state_search
+
+
+class GroundStateSearch:
+    """Simulation for variational ground state searches."""
+    def init_algorithm(self, **kwargs):
+        """Initialize the algorithm."""
+    def run_algorithm(self): pass
+    def resume_run_algorithm(self):
+        """Run the algorithm."""
+
+class PlaneWaveExcitations:
+    """Simulation for plane-wave excitations."""
+    def __init__(self, options, gs_data=None, **kwargs): pass
+    def run(self): pass
+    def resume_run(self): pass
+    def load_groundstate(self):
+        """Load ground state and convert to uMPS."""
+    def write_back_environments(self, gs_data, gs_fn):
+        """Write converged environments back into the file with the ground state."""
+    def run_algorithm(self): pass
+    def resume_run_algorithm(self):
+        """Not Implemented"""
+    def prepare_results_for_save(self): pass
+
+class OrthogonalExcitations:
+    """Find excitations by another GroundStateSearch orthogonalizing against previous states."""
+    def __init__(self, options, orthogonal_to=None, **kwargs): pass
+    def run(self): pass
+    def resume_run(self): pass
+    def init_orthogonal_from_groundstate(self):
+        """Initialize :attr:`orthogonal_to` from the ground state."""
+    def extract_segment_from_infinite(self, psi0_inf, model_inf, resume_data):
+        """Extract a finite segment from the infinite model/state."""
+    def write_converged_environments(self, gs_data, gs_fn):
+        """Write converged environments back into the file with the ground state."""
+    def init_state(self):
+        """Initialize the state."""
+    def init_algorithm(self, **kwargs): pass
+    def switch_charge_sector(self):
+        """Change the charge sector of :attr:`psi` in place."""
+    def run_algorithm(self): pass
+    def resume_run_algorithm(self): pass
+    def prepare_results_for_save(self): pass
+
+class TopologicalExcitations:
+    def __init__(self, options, gs_data_alpha=None, gs_data_beta=None, **kwargs): pass
+    def init_from_groundstate(self):
+        """Initialize :attr:`orthogonal_to` from the ground state."""
+    def extract_segment(self, psi0_alpha_Orig, psi0_beta_Orig, model_orig, resume_data_alpha, resume_data_beta):
+        """Extract a finite segment from the original model and states."""
+    def correction(self, psi0_alpha, psi0_beta, env_alpha, env_beta, last): pass
+    def arbitrary_shift_left(self, i, psi, LP): pass
+    def arbitrary_shift_right(self, i, psi, RP): pass
+    def get_reference_energy(self, psi0_alpha, psi0_beta):
+        """Obtain ground state reference energy."""
+
+class ExcitationInitialState:
+    """InitialStateBuilder for :class:`OrthogonalExcitations`."""
+    def __init__(self, sim, options): pass
+    def from_orthogonal(self): pass
