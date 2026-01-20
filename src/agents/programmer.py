@@ -41,6 +41,15 @@ programmer_prompt = ChatPromptTemplate.from_messages(
 2. **数据持久化**：模拟结束后，**必须**将关键物理量（如能量、序参量）保存为 `results.json` 文件。
 3. **无图模式**：不要调用 `plt.show()` 或生成图片。只计算并保存数据。
 4. **自包含**：代码必须包含 `if __name__ == "__main__":` 块，且包含所有必要的 import。
+5. **批处理适配 (Batch Ready)**:
+   - 代码必须使用 `argparse` 解析命令行参数。
+   - 必须接受 `--param_file` (JSON文件路径) 和 `--job_id` (整数索引)。
+   - 程序启动时，应读取 `param_file` 中的第 `job_id` 个参数字典来初始化模型。
+   - 输出文件名必须包含 job_id，例如 `results_{job_id}.json`
+6. **自动化修复 (Auto-Fix)**: 如果 `context` 中包含错误信息 (Traceback) 或物理验证失败报告，你必须：
+   - 分析错误原因（是语法错误、API误用还是参数设置不合理）。
+   - **完全重写**代码以修复该问题。
+   - 在 `explanation` 中简述修复策略。
 
 ### TeNPy 最佳实践：
 - 模型初始化：使用 `tenpy.models` 下的标准模型或 `CouplingMPOModel`。
@@ -54,6 +63,10 @@ programmer_prompt = ChatPromptTemplate.from_messages(
 {task_description}
 
 ### 上下文与参数建议 (来自 Guide/Strategist)
+{context}
+
+### 🛑 调试与上下文 (Debugging Context)
+请重点关注以下信息。如果包含错误日志，请修复代码：
 {context}
 
 ### 参考文档 (In-Context Knowledge)
