@@ -1,6 +1,6 @@
 # src/agents/guide.py
 
-from typing import Any, Dict, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -22,6 +22,9 @@ class GuideDecision(BaseModel):
     suggested_parameters: Optional[Dict[str, Any]] = Field(
         default=None, description="如需新模拟，建议的参数（如 {'h': 2.5, 'M': 128}）"
     )
+    scientific_hypothesis: str = Field(
+        description="基于当前数据的物理分析与推测。例如：'在 h=0.5 附近磁化率出现峰值，暗示可能存在相变'。"
+    )
     confidence_level: float = Field(
         ge=0.0, le=1.0, description="对当前结论的置信度（0~1）"
     )
@@ -42,32 +45,25 @@ guide_prompt = ChatPromptTemplate.from_messages(
         (
             "system",
             """你是一个量子多体模拟的科研向导（Guide Agent）。
-你的职责是**监控科研进度**并**决策下一步方向**。
+你的核心任务是**基于物理直觉推导假设**并决定后续实验。
 
-### 决策原则：
-1. **依据计划**：检查当前进度是否偏离了 Strategist 制定的计划。
-2. **依据验证**：如果 Validator 报错（如不收敛），必须建议调整参数（如增加 bond dimension）。
-3. **依据收敛性**：只有在 Validator 确认收敛后，才建议推进到下一阶段（如 Aggregation）。
-4. **隔离细节**：你不需要关注 Python 代码实现，只关注物理参数和结果摘要。
-
-请基于提供的摘要信息，输出结构化建议。
+### 科学推理要求：
+1. **模式识别**：观察数据趋势（如能隙变小、关联函数衰减变慢、序参量突变）。
+2. **提出假设**：如果发现异常或剧变，提出物理假设（如“此处可能跨越临界点”、“数值不收敛可能源于能隙关闭”）。
+3. **主动加密**：在假设的临界点或感兴趣区域，主动要求**加密采样**（Refined Sampling），而不是仅按初始计划运行。
+4. **指标建议**：如果当前指标不足以确认假设，建议计算新的物理量（如纠缠熵 $S_{EE}$、关联长度 $xi$）。
 """,
         ),
-        # 这里的 planning_history 仅包含 Strategist 和 Guide 的对话，不包含 Programmer 的代码
         MessagesPlaceholder(variable_name="planning_history"),
         (
             "human",
-            """### 1. 原始任务
-{task_description}
+            """### 1. 原始任务: {task_description}
+### 2. 当前计划状态: {current_plan}
+### 3. 数据与验证摘要:
+- 结果摘要: {data_summary}
+- Validator 反馈: {validator_feedback}
 
-### 2. 当前计划状态 (Plan Context)
-{current_plan}
-
-### 3. 数据与验证摘要 (Data Quarantine)
-- **数值结果摘要**: {data_summary}
-- **Validator 反馈**: {validator_feedback}
-
-请基于以上高层信息，决定下一步操作：
+请进行物理推导并给出决策：
 {format_instructions}""",
         ),
     ]
@@ -86,6 +82,7 @@ def guide_next_step(
     planning_history: list,
     current_plan: Optional[Dict[str, Any]] = None,
     validator_feedback: Optional[str] = None,
+    research_log: Optional[List[str]] = None,
 ) -> tuple[Dict[str, Any], list]:
     """
     根据当前结果建议下一步，实现 Context Quarantine。
@@ -127,6 +124,7 @@ def guide_next_step(
                 else "No explicit plan",
                 "data_summary": data_summary,
                 "validator_feedback": validator_feedback or "Pass (No issues)",
+                "research_log": "\n".join(research_log or []),
                 "format_instructions": parser.get_format_instructions(),
             }
         )

@@ -39,6 +39,7 @@ def submit_slurm_job_core(
             cpus=DEFAULT_SLURM_CONFIG["cpus"],
             time_limit=DEFAULT_SLURM_CONFIG["time_limit"],
             partition=DEFAULT_SLURM_CONFIG["partition"],
+            max_array_size=DEFAULT_SLURM_CONFIG["max_array_size"],
             working_dir=script_dir,
             script_name=script_name,
             array_limit=len(parameter_grid) - 1,

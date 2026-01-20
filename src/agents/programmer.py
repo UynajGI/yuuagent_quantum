@@ -1,5 +1,6 @@
 # src/agents/programmer.py
 
+import logging
 from typing import Any, Dict, Optional
 
 from langchain_core.output_parsers import JsonOutputParser
@@ -10,7 +11,7 @@ from pydantic import BaseModel, Field
 # === 关键改动：引入知识加载器 ===
 from src.knowledge.loader import get_tenpy_context
 
-
+logger = logging.getLogger(__name__)
 # 1. 定义输出结构
 class GeneratedCode(BaseModel):
     code: str = Field(description="完整的、可运行的 Python 脚本（必须使用 TeNPy）")
@@ -62,10 +63,7 @@ programmer_prompt = ChatPromptTemplate.from_messages(
             """### 任务描述
 {task_description}
 
-### 上下文与参数建议 (来自 Guide/Strategist)
-{context}
-
-### 🛑 调试与上下文 (Debugging Context)
+### 🛑 调试与上下文 (Debugging Context) / 上下文与参数建议 (来自 Guide/Strategist)
 请重点关注以下信息。如果包含错误日志，请修复代码：
 {context}
 
@@ -111,4 +109,5 @@ def generate_tenpy_code(
             "code": f"# Error generating code: {str(e)}",
             "expected_output_files": [],
             "explanation": "Generation failed.",
+        }
         }

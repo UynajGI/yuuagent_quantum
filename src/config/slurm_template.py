@@ -47,6 +47,6 @@ echo "Batch Task $SLURM_ARRAY_TASK_ID finished at $(date)"
 DEFAULT_SLURM_CONFIG = {
     "partition": "cpu_amd",
     "cpus": 4,
-    "time_limit": "02:00:00",
+    "time_limit": "04:00:00",
     "max_array_size": 100,
 }

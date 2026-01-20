@@ -105,6 +105,8 @@ def run_conductor(user_task: str, max_steps: int = 20):
         "last_error": None,  # 报错信息（Executor 或 Validator 产生）
         "is_validated": False,  # 是否通过物理验证
         "history_actions": [],  # 仅记录动作名，用于 Conductor 宏观判断
+        "last_hypothesis": None,  # Guide 最近的科学假设
+        "research_log": [],
         "repair_attempts": 0,
     }
 
@@ -149,6 +151,9 @@ def run_conductor(user_task: str, max_steps: int = 20):
         exec_params = decision.get("execution_params", None)
         reason = decision["reasoning"]
 
+        log_entry = f"Step {step + 1}: Action={action} | Logic={reason}"
+        state["research_log"].append(log_entry)
+
         logger.info(f"🤖 Decision: {action}")
         logger.info(f"📝 Logic: {reason}")
 
@@ -174,30 +179,47 @@ def run_conductor(user_task: str, max_steps: int = 20):
                 logger.info(f"📋 Plan Updated: {len(plan.get('subtasks', []))} steps.")
 
             elif action == "call_guide":
-                # Guide 需要知道当前的数据摘要来决定下一步，但不需要看具体的代码
                 data_summary = (
                     str(state["aggregated_data"])
                     if state["aggregated_data"]
                     else "No data yet"
                 )
+
+                # 获取 Guide 的决策和更新的历史
                 guide_decision, state["planning_history"] = guide_next_step(
-                    user_task, data_summary, state["planning_history"]
+                    user_task,
+                    data_summary,
+                    state["planning_history"],
+                    current_plan=state["plan"],
+                    validator_feedback=state["last_error"]
+                    if state["is_validated"] is False
+                    else None,
+                    research_log=state["research_log"],
                 )
-                logger.info(f"🧭 Guide says: {guide_decision.get('next_step')}")
-                # Guide 的输出通常会作为下一次 Conductor 循环的 Context 输入参考
+
+                # === 关键保存：将假设存入全局状态 ===
+                state["last_hypothesis"] = guide_decision.get("scientific_hypothesis")
+                logger.info(f"🧪 New Hypothesis: {state['last_hypothesis']}")
+
+                # 如果 Guide 建议调整参数，直接更新给 Conductor 决策参考
+                if guide_decision.get("suggested_parameters"):
+                    logger.info(
+                        f"💡 Guide suggests params: {guide_decision['suggested_parameters']}"
+                    )
 
             # --- Implementation Track ---
             elif action == "call_programmer":
-                # [Context Quarantine]
-                # 程序员只接收：任务 + (计划片段 OR 错误信息 OR Validator反馈)
-                # 不接收之前的完整对话历史
+                # 构建增强上下文：将 Guide 的假设注入给程序员
+                enhanced_context = context_input
+                if state.get("last_hypothesis"):
+                    enhanced_context += f"\n\n[Scientific Hypothesis to Verify]:\n{state['last_hypothesis']}"
+
+                # 如果有具体的参数建议，也一并传入
+                # 这样程序员在写 argparse 的 default 值或者参数扫描范围时会有依据
                 code_result = generate_tenpy_code(
-                    task_description=user_task,
-                    context=context_input,  # 这里的 context 是由 Conductor 明确指定的
+                    task_description=user_task, context=enhanced_context
                 )
                 state["code"] = code_result["code"]
-                state["last_error"] = None  # 新代码生成，清除旧错误
-                logger.info("💻 Code Generated/Patched.")
 
             # --- Execution Track ---
             elif action == "call_executor":
