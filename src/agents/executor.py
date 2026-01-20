@@ -1,15 +1,18 @@
 # src/agents/executor.py
 
+import glob
 import json
 import os
-import subprocess
 import tempfile
+import time
 from typing import Any, Dict, List, Optional
 
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_deepseek import ChatDeepSeek
 from pydantic import BaseModel, Field
+
+from src.tools.slurm import check_job_status_core, submit_slurm_job_core
 
 
 # 1. 定义 Executor 的输出结构
@@ -54,116 +57,122 @@ parser = JsonOutputParser(pydantic_object=ExecutionResult)
 parse_chain = parse_output_prompt | llm | parser
 
 
-# 4. 核心函数：执行代码并返回结构化结果
 def execute_simulation_code(
     code: str,
     task_description: str,
-    timeout: int = 300,  # 5 分钟超时
+    parameter_grid: Optional[List[Dict[str, Any]]] = None,  # <--- 关键新增接口
+    timeout: int = 3600,  # 批处理超时时间通常要长一些
     working_dir: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    执行 Programmer 生成的 Python 代码（使用 Renormalizer）
-
-    Args:
-        code: 完整可运行的 Python 脚本（字符串）
-        task_description: 用户任务描述（用于错误上下文）
-        timeout: 执行超时（秒）
-        working_dir: 工作目录（默认临时目录）
-
-    Returns:
-        结构化执行结果（符合 ExecutionResult schema）
+    执行模拟。自动判断是本地执行还是 Slurm 批量执行。
     """
     if working_dir is None:
         working_dir = tempfile.mkdtemp(prefix="yuuagent_exec_")
 
+    os.makedirs(working_dir, exist_ok=True)
     script_path = os.path.join(working_dir, "simulation.py")
-    log_path = os.path.join(working_dir, "output.log")
 
-    try:
-        # 写入脚本
-        with open(script_path, "w", encoding="utf-8") as f:
-            f.write(code)
+    # 1. 写入代码文件
+    with open(script_path, "w", encoding="utf-8") as f:
+        f.write(code)
 
-        # 执行脚本
-        result = subprocess.run(
-            ["python", script_path],
-            cwd=working_dir,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
+    # === 分支：是否存在参数网格？ ===
+    if parameter_grid and len(parameter_grid) > 0:
+        print(
+            f"[Executor] Detected {len(parameter_grid)} parameters. Switching to Slurm Batch Mode."
         )
+        return _execute_batch_slurm(script_path, parameter_grid, timeout)
+    else:
+        # === 默认：本地单次执行 (保持原有逻辑，或者也可以改为提交单次Slurm) ===
+        # 这里为了演示简单，保留之前的 subprocess.run 逻辑，或者调用 submit_slurm_job(..., parameter_grid=None)
+        # 建议：如果是在登录节点，最好也用 Slurm 提交单次作业，避免占用登录节点资源
+        print("[Executor] No parameters provided. Submitting single Slurm job.")
+        return _execute_batch_slurm(script_path, None, timeout)  # 复用轮询逻辑
 
-        raw_output = result.stdout + "\n" + result.stderr
-        with open(log_path, "w", encoding="utf-8") as f:
-            f.write(raw_output)
 
-        if result.returncode == 0:
-            # 成功：尝试解析输出
-            try:
-                # 假设脚本已将结果写入 JSON 文件（最佳实践）
-                json_path = os.path.join(working_dir, "results.json")
-                if os.path.exists(json_path):
-                    with open(json_path, "r") as f:
-                        data = json.load(f)
-                    return {
-                        "success": True,
-                        "output_summary": _summarize_metrics(data),
-                        "metrics": data,
-                        "error_message": None,
-                        "output_files": [json_path, log_path],
-                    }
-                else:
-                    # 回退：用 LLM 解析 stdout
-                    parsed = parse_chain.invoke(
-                        {
-                            "raw_output": raw_output[:8000],  # 截断避免超长
-                            "format_instructions": parser.get_format_instructions(),
-                        }
-                    )
-                    return parsed
-            except Exception as e:
-                return {
-                    "success": False,
-                    "output_summary": "",
-                    "metrics": {},
-                    "error_message": f"Failed to parse output: {str(e)}",
-                    "output_files": [log_path],
-                }
-        else:
-            # 失败
-            error_msg = (
-                f"Script exited with code {result.returncode}. stderr:\n{result.stderr}"
-            )
-            return {
-                "success": False,
-                "output_summary": "",
-                "metrics": {},
-                "error_message": error_msg,
-                "output_files": [log_path],
-            }
+def _execute_batch_slurm(script_path, parameter_grid, timeout):
+    """
+    内部辅助函数：处理 Slurm 提交、轮询和结果收集
+    """
+    working_dir = os.path.dirname(script_path)
 
-    except subprocess.TimeoutExpired:
+    # 1. 提交作业 (复用工具)
+    # 注意：submit_slurm_job 是个 Tool，直接调用其 python 函数逻辑即可
+    # 如果它是被 @tool 装饰的，可能需要 .invoke 或者直接提取逻辑。
+    # 这里假设我们直接调用上面定义的 python 函数逻辑。
+    submit_msg = submit_slurm_job_core(script_path, parameter_grid=parameter_grid)
+
+    if "Success" not in submit_msg:
         return {
             "success": False,
-            "output_summary": "",
+            "error_message": submit_msg,
             "metrics": {},
-            "error_message": f"Execution timed out after {timeout} seconds",
-            "output_files": [],
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "output_summary": "",
-            "metrics": {},
-            "error_message": f"Unexpected error: {str(e)}",
             "output_files": [],
         }
 
+    # 提取 Job ID (简单的字符串处理)
+    job_id = submit_msg.split("ID: ")[-1].strip().rstrip(".")
+    print(f"[Executor] Job {job_id} submitted. Waiting for completion...")
 
-# 5. 辅助函数：将 metrics 转为简短摘要
-def _summarize_metrics(metrics: Dict[str, Any]) -> str:
-    parts = []
-    for k, v in metrics.items():
-        if isinstance(v, (int, float)):
-            parts.append(f"{k}={v:.6g}")
-    return "; ".join(parts) if parts else "No numerical results found"
+    # 2. 轮询等待
+    start_time = time.time()
+    while True:
+        # === 关键修改：调用 Core 函数 ===
+        status = check_job_status_core(job_id)
+        if status == "COMPLETED":
+            break
+
+        if time.time() - start_time > timeout:
+            return {"success": False, "error_message": "Slurm execution timed out."}
+
+        time.sleep(10)
+
+    # 3. 收集结果
+    # 假设 Programmer 生成的代码会将结果保存为 results_{job_id}.json
+    # 如果是单次任务，可能是 results.json
+    results = []
+
+    if parameter_grid:
+        # 批量模式：查找所有 results_*.json
+        json_files = glob.glob(os.path.join(working_dir, "results_*.json"))
+        # 按索引排序确保顺序
+        # 假设文件名是 results_0.json, results_1.json
+        try:
+            json_files.sort(key=lambda x: int(x.split("_")[-1].split(".")[0]))
+        except ValueError:
+            pass  # 如果文件名格式不对就不强求排序
+    else:
+        # 单次模式
+        json_files = glob.glob(os.path.join(working_dir, "results.json"))
+
+    if not json_files:
+        # 读取错误日志
+        err_files = glob.glob(os.path.join(working_dir, "*.err"))
+        err_msg = "No result files found."
+        if err_files:
+            with open(err_files[0], "r") as f:
+                err_msg += f"\nLast Error Log:\n{f.read()}"
+        return {
+            "success": False,
+            "error_message": err_msg,
+            "metrics": {},
+            "output_files": glob.glob(os.path.join(working_dir, "*")),
+        }
+
+    # 读取所有数据
+    for jf in json_files:
+        with open(jf, "r") as f:
+            results.append(json.load(f))
+
+    # 4. 返回
+    # 如果是批量，metrics 返回列表；如果是单次，返回字典（保持接口兼容性）
+    final_metrics = results if parameter_grid else results[0]
+
+    return {
+        "success": True,
+        "output_summary": f"Collected {len(results)} results from Slurm.",
+        "metrics": final_metrics,  # Aggregator 需要适配处理 List
+        "error_message": None,
+        "output_files": json_files,
+    }
