@@ -1,10 +1,9 @@
 # src/agents/guide.py
 
-import json
 from typing import Any, Dict, List, Literal, Optional, Union
 
 from langchain_core.output_parsers import JsonOutputParser
-from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_deepseek import ChatDeepSeek
 from pydantic import BaseModel, Field
 
@@ -50,6 +49,7 @@ guide_prompt = ChatPromptTemplate.from_messages(
 请基于科学严谨性回答，避免过度自信。
 """,
         ),
+        MessagesPlaceholder(variable_name="chat_history"),
         (
             "human",
             """原始研究任务：{task_description}
@@ -73,7 +73,8 @@ chain = guide_prompt | llm | parser
 def guide_next_step(
     task_description: str,
     current_results: Union[str, List[Dict[str, Any]], Dict[str, Any]],
-) -> Dict[str, Any]:
+    history: list,
+) -> tuple[Dict[str, Any], list]:
     """
     根据当前结果，建议下一步行动
 
@@ -87,25 +88,23 @@ def guide_next_step(
     Returns:
         结构化决策（符合 GuideDecision schema）
     """
+    history.append(
+        {
+            "role": "user",
+            "content": f"Current simulation results: {current_results}. What is the next step?",
+        }
+    )
     # 标准化输入为字符串
-    if isinstance(current_results, (list, dict)):
-        input_str = json.dumps(current_results, indent=2, ensure_ascii=False)
-    else:
-        input_str = str(current_results)
-
     try:
         result = chain.invoke(
             {
                 "task_description": task_description,
-                "current_results": input_str[:8000],  # 防止超长
+                "current_results": current_results,
+                "chat_history": history,
                 "format_instructions": parser.get_format_instructions(),
             }
         )
-        return result
-    except Exception as e:
-        return {
-            "next_step": "request_human_help",
-            "reasoning": f"Guide failed due to: {str(e)}",
-            "suggested_parameters": None,
-            "confidence_level": 0.0,
-        }
+        history.append({"role": "assistant", "content": str(result)})
+        return result, history
+    except Exception:
+        return {"next_step": "request_human_help"}, history

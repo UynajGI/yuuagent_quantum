@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 
 from src.agents.aggregator import aggregate_simulation_results
 from src.agents.executor import execute_simulation_code
+from src.agents.guide import guide_next_step
 from src.agents.programmer import generate_tenpy_code
 
 # === 引入所有 Agent ===
@@ -30,6 +31,7 @@ class ConductorDecision(BaseModel):
         "call_aggregator",
         "call_validator",
         "call_visualizer",
+        "call_guide",
         "terminate",
     ] = Field(description="下一步调用的 Agent")
     reasoning: str = Field(description="决策理由")
@@ -76,6 +78,7 @@ def run_conductor(user_task: str, max_steps: int = 15):
     state = {
         "user_task": user_task,
         "history": [],
+        "planning_thread": [],
         "last_output": None,
         "last_error": None,
         "code": None,  # 暂存生成的代码
@@ -112,10 +115,19 @@ def run_conductor(user_task: str, max_steps: int = 15):
                 break
 
             elif action == "call_strategist":
-                output = decompose_task(user_task)
+                output, state["planning_thread"] = decompose_task(
+                    user_task, state["planning_thread"]
+                )
                 state["plan"] = output
                 current_output = f"Plan created: {output.get('subtasks')}"
-
+            elif (
+                action == "call_guide"
+            ):  # This often happens after a Validator or Executor call
+                results_summary = str(state["data"])
+                output, state["planning_thread"] = guide_next_step(
+                    user_task, results_summary, state["planning_thread"]
+                )
+                current_output = f"Guide recommends: {output['next_step']}"
             elif action == "call_programmer":
                 # 将计划或之前的错误传给程序员
                 context = (

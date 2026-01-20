@@ -3,7 +3,7 @@
 from typing import Any, Dict, List
 
 from langchain_core.output_parsers import JsonOutputParser
-from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_deepseek import ChatDeepSeek
 from pydantic import BaseModel, Field, field_validator
 
@@ -51,6 +51,7 @@ strategist_prompt = ChatPromptTemplate.from_messages(
 请输出结构化计划，不要生成代码。
 """,
         ),
+        MessagesPlaceholder(variable_name="chat_history"),
         (
             "human",
             """用户原始任务：
@@ -69,7 +70,7 @@ chain = strategist_prompt | llm | parser
 
 
 # 5. 核心函数
-def decompose_task(user_task: str) -> Dict[str, Any]:
+def decompose_task(user_task: str, history: list) -> tuple[Dict[str, Any], list]:
     """
     将用户任务分解为结构化子任务计划
 
@@ -79,18 +80,17 @@ def decompose_task(user_task: str) -> Dict[str, Any]:
     Returns:
         结构化策略计划（符合 StrategyPlan schema）
     """
+
+    history.append({"role": "user", "content": f"User Task: {user_task}"})
     try:
         result = chain.invoke(
             {
                 "user_task": user_task,
                 "format_instructions": parser.get_format_instructions(),
+                "chat_history": history,  # Ensure your prompt template supports this
             }
         )
-        return result
-    except Exception as e:
-        return {
-            "task_summary": f"Failed to decompose task: {str(e)}",
-            "subtasks": [],
-            "required_parameters": {},
-            "expected_outputs": [],
-        }
+        history.append({"role": "assistant", "content": str(result)})
+        return result, history
+    except Exception:
+        return {"subtasks": []}, history

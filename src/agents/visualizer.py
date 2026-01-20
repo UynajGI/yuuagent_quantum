@@ -2,7 +2,7 @@
 
 import json
 import os
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Literal, Union
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -15,9 +15,8 @@ from pydantic import BaseModel, Field
 
 # 1. 定义 Visualizer 的决策输出结构
 class VisualizationPlan(BaseModel):
-    plot_type: str = Field(
-        description="图表类型",
-        enum=["line", "scatter", "heatmap", "phase_diagram", "bar"],
+    plot_type: Literal["line", "scatter", "heatmap", "phase_diagram", "bar"] = Field(
+        description="图表类型"
     )
     x_var: str = Field(description="X 轴变量名（如 'h', 'time'）")
     y_var: str = Field(description="Y 轴变量名（如 'mz', 'energy'）")
