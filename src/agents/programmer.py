@@ -12,6 +12,8 @@ from pydantic import BaseModel, Field
 from src.knowledge.loader import get_tenpy_context
 
 logger = logging.getLogger(__name__)
+
+
 # 1. 定义输出结构
 class GeneratedCode(BaseModel):
     code: str = Field(description="完整的、可运行的 Python 脚本（必须使用 TeNPy）")
@@ -24,7 +26,7 @@ class GeneratedCode(BaseModel):
 
 # 2. 初始化 LLM
 llm = ChatDeepSeek(
-    model="deepseek-chat",
+    model="deepseek-reasoner",
     temperature=0,  # 代码生成必须严谨
     max_retries=2,
 )
@@ -109,5 +111,4 @@ def generate_tenpy_code(
             "code": f"# Error generating code: {str(e)}",
             "expected_output_files": [],
             "explanation": "Generation failed.",
-        }
         }

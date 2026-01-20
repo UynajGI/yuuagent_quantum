@@ -31,7 +31,7 @@ class StrategyPlan(BaseModel):
 
 # 2. 初始化 LLM (保持不变)
 llm = ChatDeepSeek(
-    model="deepseek-chat",
+    model="deepseek-reasoner",
     temperature=0,
     max_retries=2,
 )

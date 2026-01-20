@@ -32,7 +32,7 @@ class GuideDecision(BaseModel):
 
 # 2. 初始化 LLM
 llm = ChatDeepSeek(
-    model="deepseek-chat",
+    model="deepseek-reasoner",
     temperature=0,
     max_retries=2,
 )

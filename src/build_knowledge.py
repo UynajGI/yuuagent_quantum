@@ -15,7 +15,7 @@ os.environ["HTTPS_PROXY"] = ""
 
 # ================= 1. 路径与配置 =================
 TENPY_ROOT = Path("/share/home/jiangyuan/yuuagent_quantum/tenpy")
-CHROMA_PATH = Path(__file__).parent / "chroma_db"
+CHROMA_PATH = Path(__file__).parent / "knowledge" / "chroma_db"
 EXAMPLES_SRC = TENPY_ROOT / "examples"
 TENPY_PKG = TENPY_ROOT / "tenpy"
 DOC_SRC = TENPY_ROOT / "doc"
