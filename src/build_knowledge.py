@@ -1,174 +1,130 @@
-import ast
+import json  # <--- ✅ 补上了！
 import os
 import shutil
 from pathlib import Path
 
 import chromadb
-import tiktoken
 from chromadb.utils import embedding_functions
+from tqdm import tqdm  # 如果没安装 tqdm，可以去掉相关代码或 pip install tqdm
 
-# 强制开启离线模式并清理代理
+# ================= 1. 环境配置 (离线模式) =================
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
 os.environ["HF_DATASETS_OFFLINE"] = "1"
 os.environ["HTTP_PROXY"] = ""
 os.environ["HTTPS_PROXY"] = ""
 
-# ================= 1. 路径与配置 =================
-TENPY_ROOT = Path("/share/home/jiangyuan/yuuagent_quantum/tenpy")
-CHROMA_PATH = Path(__file__).parent / "knowledge" / "chroma_db"
-EXAMPLES_SRC = TENPY_ROOT / "examples"
-TENPY_PKG = TENPY_ROOT / "tenpy"
-DOC_SRC = TENPY_ROOT / "doc"
+# ================= 2. 路径配置 =================
+PROJECT_ROOT = Path("/share/home/jiangyuan/yuuagent_quantum")
+# 输入：刚才生成的清洗后的 JSON
+CORPUS_JSON_PATH = PROJECT_ROOT / "src" / "knowledge" / "tenpy_corpus_clean.json"
+# 输出：向量数据库路径
+CHROMA_PATH = PROJECT_ROOT / "src" / "knowledge" / "chroma_db"
 
-# 初始化 Embedding
+# ================= 3. Embedding 初始化 =================
+# 必须与 loader.py 中的模型一致
 emb_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
     model_name="all-MiniLM-L6-v2", local_files_only=True
 )
 
-# Tiktoken 缓存配置
-cache_dir = os.path.expanduser("~/.cache/tiktoken_cache")
-os.environ["TIKTOKEN_CACHE_DIR"] = cache_dir
-enc = tiktoken.get_encoding("cl100k_base")
 
-# ================= 2. 核心存储工具 =================
-
-
-def add_to_vector_db(
-    collection, category: str, name: str, content: str, is_core: bool = False
-):
-    """将知识块存入 Chroma，传入 collection 对象"""
-    if not content.strip():
-        return
-
-    tokens = len(enc.encode(content, disallowed_special=()))
-
-    collection.add(
-        ids=[name],
-        documents=[content],
-        metadatas=[
-            {
-                "category": category,
-                "name": name,
-                "tokens": tokens,
-                "is_core": is_core,
-            }
-        ],
-    )
-
-
-# ================= 3. API 解析：原子化类 + 冗余方法 =================
-
-
-class APIChunkVisitor(ast.NodeVisitor):
-    def __init__(self, module_name: str, source_code: str, collection):
-        self.module_name = module_name
-        self.source_code = source_code
-        self.collection = collection
-
-    def visit_ClassDef(self, node):
-        if node.name.startswith("_"):
-            return
-
-        class_content = ast.get_source_segment(self.source_code, node)
-        class_id = f"{self.module_name}.{node.name}"
-
-        is_core_class = any(
-            kw in node.name for kw in ["Model", "DMRG", "MPS", "MPO", "Algorithm"]
-        )
-        add_to_vector_db(
-            self.collection, "api", class_id, class_content, is_core=is_core_class
-        )
-
-        for item in node.body:
-            if isinstance(item, ast.FunctionDef) and not item.name.startswith("_"):
-                method_content = ast.get_source_segment(self.source_code, item)
-                method_id = f"{class_id}.{item.name}"
-                add_to_vector_db(
-                    self.collection, "api", method_id, method_content, is_core=False
-                )
-
-    def visit_FunctionDef(self, node):
-        if node.name.startswith("_"):
-            return
-        func_content = ast.get_source_segment(self.source_code, node)
-        func_id = f"{self.module_name}.{node.name}"
-        add_to_vector_db(self.collection, "api", func_id, func_content)
-
-
-def process_api(collection):
-    print("\n🔹 Processing API (Atomic Classes & Redundant Methods)...")
-    for root, _, files in os.walk(TENPY_PKG):
-        rel_path = Path(root).relative_to(TENPY_PKG)
-        if "test" in str(rel_path) or "__" in str(rel_path):
-            continue
-
-        for pf in [f for f in files if f.endswith(".py")]:
-            module_name = "tenpy." + ".".join(list(rel_path.parts) + [pf[:-3]]).replace(
-                "..", "."
-            )
-            with open(Path(root) / pf, "r", encoding="utf-8") as f:
-                code = f.read()
-                visitor = APIChunkVisitor(module_name, code, collection)
-                try:
-                    visitor.visit(ast.parse(code))
-                except Exception as e:
-                    print(f"Skipping {module_name} due to parse error: {e}")
-
-
-# ================= 4. 其他清洗逻辑 =================
-
-
-def process_tutorials(collection):
-    print("\n🔹 Processing Tutorials...")
-    for rst in DOC_SRC.rglob("*.rst"):
-        if any(bad in rst.name for bad in ["changelog", "release", "history"]):
-            continue
-        try:
-            with open(rst, "r", encoding="utf-8") as f:
-                content = f.read()
-                is_core = "intro" in rst.name or "workflow" in rst.name
-                add_to_vector_db(
-                    collection, "tutorials", f"doc.{rst.stem}", content, is_core=is_core
-                )
-        except Exception as e:
-            print(f"Error processing tutorial {rst.name}: {e}")
-
-
-def process_examples(collection):
-    print("\n🔹 Processing Examples...")
-    for ex in EXAMPLES_SRC.rglob("*.py"):
-        if "test" in ex.name:
-            continue
-        try:
-            with open(ex, "r", encoding="utf-8") as f:
-                add_to_vector_db(collection, "examples", f"example.{ex.stem}", f.read())
-        except Exception as e:
-            print(f"Error processing example {ex.name}: {e}")
-
-
-# ================= 主程序 =================
+def flatten_metadata(meta: dict) -> dict:
+    """
+    ChromaDB 的 metadata 值只能是 str, int, float, bool。
+    不能存 list 或 dict。我们需要把清洗脚本生成的复杂 metadata 拍平。
+    """
+    clean_meta = {}
+    for k, v in meta.items():
+        if isinstance(v, (list, dict)):
+            # 将列表/字典转为字符串存储
+            clean_meta[k] = str(v)
+        elif v is None:
+            clean_meta[k] = ""
+        else:
+            clean_meta[k] = v
+    return clean_meta
 
 
 def main():
-    print("🚀 Starting Structured Knowledge Build")
+    print("🚀 Starting Database Build from Clean Corpus...")
 
-    # 1. 彻底清理旧数据（避免 NFS 文件锁导致的元数据不同步）
+    # 1. 检查输入文件
+    if not CORPUS_JSON_PATH.exists():
+        raise FileNotFoundError(
+            f"❌ Corpus not found at {CORPUS_JSON_PATH}. Run build_clean_corpus.py first!"
+        )
+
+    # 2. 清理旧数据库 (强制重建，保证干净)
     if CHROMA_PATH.exists():
-        print(f"Cleaning old DB at {CHROMA_PATH}...")
+        print(f"🗑️  Cleaning old DB at {CHROMA_PATH}...")
         shutil.rmtree(CHROMA_PATH)
 
-    # 2. 重新初始化 Client 和 Collection
+    # 3. 初始化 Chroma
     client = chromadb.PersistentClient(path=str(CHROMA_PATH))
     collection = client.create_collection(
         name="tenpy_knowledge", embedding_function=emb_fn
     )
 
-    # 3. 运行处理函数
-    process_api(collection)
-    process_examples(collection)
-    process_tutorials(collection)
+    # 4. 加载语料
+    print(f"📖 Loading corpus from {CORPUS_JSON_PATH}...")
+    with open(CORPUS_JSON_PATH, "r", encoding="utf-8") as f:
+        corpus = json.load(f)
 
-    print(f"\n✅ Vector DB build complete at {CHROMA_PATH}")
+    print(f"🔹 Found {len(corpus)} items. Inserting into Vector DB...")
+
+    # 5. 批量插入 (Batch Insert) - 提高效率
+    BATCH_SIZE = 200
+    ids_batch = []
+    docs_batch = []
+    metas_batch = []
+
+    for item in tqdm(corpus, desc="Indexing"):
+        # 准备数据
+        # 你的清洗脚本生成的字段: type, name, file, content, summary, metadata
+
+        # 构造 ID (确保唯一)
+        # 清洗脚本里的 name 已经是唯一的了 (如 tenpy.algorithms.dmrg.TwoSiteDMRGEngine.run)
+        doc_id = item["name"]
+
+        # 构造文档内容
+        # 如果有 summary，可以把 summary 加到 content 前面加强语义，或者直接存 content
+        # 这里直接存 content (源码/完整文档)
+        document = item["content"]
+
+        # 构造 Metadata
+        # 融合顶层字段和内层 metadata
+        meta = {
+            "type": item["type"],
+            "name": item["name"],
+            "file": item["file"],
+            "summary": item.get("summary", "")[:1000],  # 限制 summary 长度
+            # 标记是否为核心概念 (用于后续 loader.py 逻辑)
+            "is_core": "doc_intro" in item["name"]
+            or "doc_workflow" in item["name"]
+            or "class" in item["type"],
+        }
+
+        # 融合清洗脚本提取的额外 metadata (如 args, bases)
+        if "metadata" in item:
+            meta.update(flatten_metadata(item["metadata"]))
+
+        # 加入批次
+        ids_batch.append(doc_id)
+        docs_batch.append(document)
+        metas_batch.append(meta)
+
+        # 达到批次大小，提交
+        if len(ids_batch) >= BATCH_SIZE:
+            collection.add(ids=ids_batch, documents=docs_batch, metadatas=metas_batch)
+            ids_batch = []
+            docs_batch = []
+            metas_batch = []
+
+    # 6. 处理剩余数据
+    if ids_batch:
+        collection.add(ids=ids_batch, documents=docs_batch, metadatas=metas_batch)
+
+    print(f"\n✅ Vector DB build complete! Saved to {CHROMA_PATH}")
+    print(f"📊 Total items indexed: {collection.count()}")
 
 
 if __name__ == "__main__":

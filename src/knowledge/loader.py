@@ -1,92 +1,206 @@
+import json
+import os
+import re
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Dict, List, Set, Tuple
 
-import chromadb
-from chromadb.utils import embedding_functions
+# ================= 配置 =================
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+# 你的语料库路径
+CORPUS_PATH = PROJECT_ROOT / "src" / "knowledge" / "tenpy_corpus_clean.json"
 
-KNOWLEDGE_ROOT = Path(__file__).parent.resolve()
-CHROMA_PATH = KNOWLEDGE_ROOT / "chroma_db"
 
-
-class AdvancedRetriever:
+class SymbolicLoader:
     def __init__(self):
-        # 1. 初始化 Embedding 函数
-        self.emb_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
-            model_name="all-MiniLM-L6-v2"
-        )
-        self.client = chromadb.PersistentClient(path=str(CHROMA_PATH))
-        self.collection = self.client.get_collection(
-            name="tenpy_knowledge", embedding_function=self.emb_fn
-        )
+        print(f"📚 [SymbolicLoader] Loading cleaned corpus from: {CORPUS_PATH}")
+        if not CORPUS_PATH.exists():
+            raise FileNotFoundError(f"❌ Corpus not found: {CORPUS_PATH}")
 
-    def _get_core_knowledge(self) -> List[str]:
-        """
-        [方案三：核心注入]
-        强制检索标记为 'core' 的文档（如 Workflow 模板、Model 基类）
-        """
-        results = self.collection.get(where={"is_core": True}, include=["documents"])
-        return results["documents"] if results["documents"] else []
+        with open(CORPUS_PATH, "r", encoding="utf-8") as f:
+            self.corpus = json.load(f)
 
-    def get_context(self, query: str, max_tokens: int = 45000) -> str:
-        """
-        构建防碎片化的结构化上下文
-        """
-        # 1. 加载常驻核心知识 (解决“只见树木不见森林”)
-        final_chunks = self._get_core_knowledge()
-        current_tokens = sum([len(c) // 4 for c in final_chunks])  # 粗略估计
+        # === 索引构建 ===
+        self.full_name_index: Dict[str, dict] = {}
+        self.short_name_index: Dict[str, List[dict]] = {}
 
-        # 2. 执行向量检索 (Top 10)
-        search_results = self.collection.query(
-            query_texts=[query], n_results=10, include=["documents", "metadatas"]
+        # 🌟 新增：专门存放示例脚本的列表
+        self.example_library: List[dict] = []
+
+        # 核心文档
+        self.core_docs: List[str] = []
+
+        self._build_index()
+        print(
+            f"✅ [SymbolicLoader] Indexed {len(self.corpus)} items. Example Library size: {len(self.example_library)}"
         )
 
-        seen_ids = set()
-        retrieved_docs = search_results["documents"][0]
-        retrieved_metas = search_results["metadatas"][0]
+    def _build_index(self):
+        for item in self.corpus:
+            name = item["name"]
+            item_type = item.get("type", "")
 
-        # 3. [方案一：父文档追溯逻辑]
-        context_blocks = []
-        for doc, meta in zip(retrieved_docs, retrieved_metas):
-            chunk_id = meta["name"]
-            if chunk_id in seen_ids:
-                continue
+            # 1. 专门归档示例脚本
+            if item_type == "example_script" or "examples" in item["file"]:
+                self.example_library.append(item)
 
-            # 碎片化修复：如果检索到的是类的方法，自动补全所属类的定义
-            if meta["category"] == "api" and "." in chunk_id:
-                parent_class_id = ".".join(chunk_id.split(".")[:-1])
-                if parent_class_id not in seen_ids:
-                    # 尝试从库里拉取父类的整体定义（包含 __init__）
-                    parent_doc = self.collection.get(ids=[parent_class_id])
-                    if parent_doc["documents"]:
-                        context_blocks.append(
-                            f"### PARENT CLASS: {parent_class_id} ###\n{parent_doc['documents'][0]}"
+            # 2. 归档核心文档
+            elif "doc_intro" in name or "doc_workflow" in name:
+                self.core_docs.append(item["content"])
+
+            # 3. 通用索引 (全名 & 短名)
+            self.full_name_index[name] = item
+
+            short_name = name.split(".")[-1]
+            if short_name not in self.short_name_index:
+                self.short_name_index[short_name] = []
+            self.short_name_index[short_name].append(item)
+
+    def _extract_keywords(self, text: str) -> Set[str]:
+        """提取关键词，用于匹配"""
+        # 提取字母数字组合，转小写
+        words = set(re.findall(r"[a-zA-Z_0-9]+", text.lower()))
+        # 过滤停用词
+        stopwords = {
+            "main",
+            "print",
+            "len",
+            "simulation",
+            "python",
+            "calculate",
+            "using",
+            "for",
+            "the",
+            "and",
+            "model",
+        }
+        return {w for w in words if w not in stopwords and len(w) > 2}
+
+    def _find_best_examples(self, task_description: str, limit: int = 2) -> List[str]:
+        """
+        🌟 核心逻辑：根据任务描述，找到最匹配的示例脚本
+        """
+        keywords = self._extract_keywords(task_description)
+        scored_examples: List[Tuple[int, dict]] = []
+
+        for ex in self.example_library:
+            score = 0
+            ex_name = ex["name"].lower()
+            ex_content = ex["content"].lower()
+
+            # 简单评分机制
+            for kw in keywords:
+                # 文件名包含关键词 (权重高)
+                if kw in ex_name:
+                    score += 10
+                # 内容包含关键词 (权重低)
+                elif kw in ex_content:
+                    score += 1
+
+            if score > 0:
+                scored_examples.append((score, ex))
+
+        # 按分数降序排列
+        scored_examples.sort(key=lambda x: x[0], reverse=True)
+
+        # 返回前 N 个
+        results = []
+        for score, ex in scored_examples[:limit]:
+            print(f"   💡 Found relevant example: {ex['name']} (Score: {score})")
+            results.append(
+                f"### 🔥 REFERENCE EXAMPLE: {ex['name']} ###\n{ex['content']}"
+            )
+
+        return results
+
+    def get_context(self, task_description: str, error_context: str = "") -> str:
+        """
+        智能上下文组装
+        """
+        final_context = []
+
+        # === 场景 A: 报错修复 (Debug Mode) ===
+        # 优先级最高：如果报错了，必须查源码
+        if error_context and ("Traceback" in error_context or "Error" in error_context):
+            print("🕵️ [SymbolicLoader] Debug Mode Activated.")
+            keywords = self._extract_keywords(error_context)
+
+            for kw in keywords:
+                # 在短名索引里找 (比如 'run')
+                if kw in self.short_name_index:
+                    hits = self.short_name_index[kw]
+                    # 优先找 API 定义，排除 example (debug 时不需要 example，要看底层实现)
+                    hits = [h for h in hits if h["type"] != "example_script"]
+                    # 排序：优先 tenpy 库文件
+                    hits.sort(
+                        key=lambda x: 1 if "tenpy" in x["name"] else 0, reverse=True
+                    )
+
+                    for hit in hits[:2]:
+                        final_context.append(
+                            f"### CRITICAL SOURCE CODE: {hit['name']} ###\n{hit['content']}"
                         )
-                        seen_ids.add(parent_class_id)
 
-            context_blocks.append(f"### DETAIL: {chunk_id} ###\n{doc}")
-            seen_ids.add(chunk_id)
+            return "\n\n".join(final_context)
 
-        # 4. 组装并控制 Token 长度
-        for block in context_blocks:
-            block_tokens = len(block) // 4
-            if current_tokens + block_tokens > max_tokens:
-                break
-            final_chunks.append(block)
-            current_tokens += block_tokens
+        # === 场景 B: 正常编程 (Exploration Mode) ===
+        # 优先级：示例脚本 > 核心文档 > API定义
+        print("📖 [SymbolicLoader] Exploration Mode (Example-First Strategy).")
 
-        # 5. 格式化输出 (符合论文要求的 Curated 风格)
-        context_str = "\n\n".join(final_chunks)
+        # 1. 🔥 注入最匹配的示例脚本 (这是你最想要的！)
+        best_examples = self._find_best_examples(task_description)
+        final_context.extend(best_examples)
 
-        return f"""你现在拥有 TeNPy 的结构化参考文档。请严格遵循 API 签名和工作流建议。
+        # 2. 注入核心文档 (Intro/Workflow) 用于补充概念
+        if not best_examples:  # 如果没找到示例，多放点文档
+            for doc in self.core_docs[:3]:
+                final_context.append(f"### CORE DOC ###\n{doc[:2000]}...")
+        else:
+            # 如果有示例，文档少放点，省 token
+            for doc in self.core_docs[:1]:
+                final_context.append(f"### CORE DOC ###\n{doc[:1000]}...")
 
-{context_str}
+        # 3. 补充一些 API 定义 (基于关键词)
+        # 比如提到了 TFIModel，就把 TFIModel 的类定义放进去
+        keywords = self._extract_keywords(task_description)
+        for kw in keywords:
+            if kw in self.short_name_index:
+                hits = self.short_name_index[kw]
+                # 只看类定义，且不是 example
+                hits = [
+                    h
+                    for h in hits
+                    if h["type"] == "api_class" and "example" not in h["name"]
+                ]
+                for hit in hits[:1]:
+                    final_context.append(
+                        f"### API REFERENCE: {hit['name']} ###\n{hit['summary']}"
+                    )
 
-[注意]：优先使用上述文档中的类和参数，不要编造不存在的属性。"""
+        return "\n\n".join(final_context)
+
+    def lookup_specific(self, name: str) -> str:
+        if name in self.full_name_index:
+            return self.full_name_index[name]["content"]
+        return ""
 
 
-# 单例模式
-_retriever = AdvancedRetriever()
+# === 单例 ===
+try:
+    _loader = SymbolicLoader()
+except Exception as e:
+    print(f"⚠️ SymbolicLoader init failed: {e}")
+    _loader = None
 
 
-def get_tenpy_context(task_description: str) -> str:
-    return _retriever.get_context(task_description)
+# === 导出接口 ===
+def get_tenpy_context(task_description: str, context: str = "") -> str:
+    if _loader:
+        err_ctx = context if context and "Traceback" in context else ""
+        return _loader.get_context(task_description, error_context=err_ctx)
+    return ""
+
+
+def lookup_specific_api(symbol_name: str) -> str:
+    if _loader:
+        return _loader.lookup_specific(symbol_name)
+    return ""
