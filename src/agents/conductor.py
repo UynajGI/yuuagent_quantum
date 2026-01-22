@@ -252,6 +252,20 @@ def run_conductor(user_task: str, max_steps: int = 20):
                 )
                 state["code"] = code_result["code"]
 
+                # 6. 关键：修复成功后的状态重置
+                if state["last_error"]:
+                    logger.info(
+                        "✅ Code repaired. Resetting error state to trigger Execution."
+                    )
+
+                    # A. 清除错误，打破循环 -> Next Step: call_executor
+                    state["last_error"] = None
+
+                    # B. 清除旧数据，防止污染
+                    state["raw_metrics"] = []
+                    state["aggregated_data"] = None
+                    state["is_validated"] = False
+
             # --- Execution Track ---
             elif action == "call_executor":
                 if not state["code"]:
