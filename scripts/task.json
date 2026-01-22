@@ -1,0 +1,40 @@
+{
+    "task_meta": {
+        "task_name": "Ising_GroundState_Test",
+        "description": "计算 1D 横场 Ising 模型的基态能量和平均磁矩。验证在临界点 g=1.0 附近的行为。",
+        "created_by": "Jiang"
+    },
+    "physical_model": {
+        "model_name": "TransverseFieldIsingChain",
+        "lattice_size": 24,
+        "boundary_condition": "open",
+        "coupling_parameters": {
+            "J": 1.0,
+            "g": 1.5
+        }
+    },
+    "numerical_method": {
+        "algorithm": "dmrg",
+        "chi_max": 30,
+        "max_sweeps": 10,
+        "convergence_threshold": 1e-6
+    },
+    "exploration_plan": {
+        "scan_parameter": "g",
+        "range_start": 0.5,
+        "range_end": 1.5,
+        "steps": 15,
+        "adaptive_sampling": false
+    },
+    "scientific_goals": {
+        "observables": [
+            "energy",
+            "magnetization_z",
+            "entanglement_entropy"
+        ],
+        "success_criteria": [
+            "Output files generated",
+            "Energy converges"
+        ]
+    }
+}

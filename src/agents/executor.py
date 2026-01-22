@@ -1,15 +1,19 @@
 # src/agents/executor.py
 
+import glob
 import json
 import os
-import subprocess
 import tempfile
+import time
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_deepseek import ChatDeepSeek
 from pydantic import BaseModel, Field
+
+from src.tools.slurm import check_job_status_core, submit_slurm_job_core
 
 
 # 1. 定义 Executor 的输出结构
@@ -54,116 +58,128 @@ parser = JsonOutputParser(pydantic_object=ExecutionResult)
 parse_chain = parse_output_prompt | llm | parser
 
 
-# 4. 核心函数：执行代码并返回结构化结果
 def execute_simulation_code(
     code: str,
     task_description: str,
-    timeout: int = 300,  # 5 分钟超时
+    parameter_grid: Optional[List[Dict[str, Any]]] = None,
+    timeout: int = 3600,
     working_dir: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    执行 Programmer 生成的 Python 代码（使用 Renormalizer）
-
-    Args:
-        code: 完整可运行的 Python 脚本（字符串）
-        task_description: 用户任务描述（用于错误上下文）
-        timeout: 执行超时（秒）
-        working_dir: 工作目录（默认临时目录）
-
-    Returns:
-        结构化执行结果（符合 ExecutionResult schema）
+    执行模拟。统一使用 Slurm Batch 接口，确保参数传递一致性。
     """
     if working_dir is None:
-        working_dir = tempfile.mkdtemp(prefix="yuuagent_exec_")
+        project_root = Path(__file__).resolve().parent.parent.parent
+        workspace_root = project_root / "workspace"
+        os.makedirs(workspace_root, exist_ok=True)
+        working_dir = tempfile.mkdtemp(prefix="exec_", dir=workspace_root)
 
+    os.makedirs(working_dir, exist_ok=True)
     script_path = os.path.join(working_dir, "simulation.py")
-    log_path = os.path.join(working_dir, "output.log")
 
-    try:
-        # 写入脚本
-        with open(script_path, "w", encoding="utf-8") as f:
-            f.write(code)
+    # 2. 写入代码
+    with open(script_path, "w", encoding="utf-8") as f:
+        f.write(code)
 
-        # 执行脚本
-        result = subprocess.run(
-            ["python", script_path],
-            cwd=working_dir,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-        )
+    # === 3. 统一批处理逻辑 (Unified Batch Strategy) ===
+    # 标记原本是否为单次运行，用于后续解包结果
+    is_single_run = False
 
-        raw_output = result.stdout + "\n" + result.stderr
-        with open(log_path, "w", encoding="utf-8") as f:
-            f.write(raw_output)
+    if not parameter_grid or len(parameter_grid) == 0:
+        print("[Executor] Single run detected. Converting to Batch-of-One.")
+        is_single_run = True
+        parameter_grid = [{"_job_type": "single_run"}]  # 伪造一个参数列表
 
-        if result.returncode == 0:
-            # 成功：尝试解析输出
-            try:
-                # 假设脚本已将结果写入 JSON 文件（最佳实践）
-                json_path = os.path.join(working_dir, "results.json")
-                if os.path.exists(json_path):
-                    with open(json_path, "r") as f:
-                        data = json.load(f)
-                    return {
-                        "success": True,
-                        "output_summary": _summarize_metrics(data),
-                        "metrics": data,
-                        "error_message": None,
-                        "output_files": [json_path, log_path],
-                    }
-                else:
-                    # 回退：用 LLM 解析 stdout
-                    parsed = parse_chain.invoke(
-                        {
-                            "raw_output": raw_output[:8000],  # 截断避免超长
-                            "format_instructions": parser.get_format_instructions(),
-                        }
-                    )
-                    return parsed
-            except Exception as e:
-                return {
-                    "success": False,
-                    "output_summary": "",
-                    "metrics": {},
-                    "error_message": f"Failed to parse output: {str(e)}",
-                    "output_files": [log_path],
-                }
+    print(f"[Executor] Submitting Job Array with {len(parameter_grid)} tasks.")
+
+    # 执行任务
+    raw_result = _execute_batch_slurm(script_path, parameter_grid, timeout)
+
+    # === 4. 结果解包修正 (Fix Return Type Mismatch) ===
+    if is_single_run and raw_result["success"]:
+        # 如果原本是单任务，metrics 当前是 List[Dict]，需要变成 Dict
+        metrics_list = raw_result["metrics"]
+        if isinstance(metrics_list, list) and len(metrics_list) > 0:
+            raw_result["metrics"] = metrics_list[0]
         else:
-            # 失败
-            error_msg = (
-                f"Script exited with code {result.returncode}. stderr:\n{result.stderr}"
-            )
-            return {
-                "success": False,
-                "output_summary": "",
-                "metrics": {},
-                "error_message": error_msg,
-                "output_files": [log_path],
-            }
+            raw_result["metrics"] = {}  # 防御性编程
 
-    except subprocess.TimeoutExpired:
+    return raw_result
+
+
+def _execute_batch_slurm(script_path, parameter_grid, timeout):
+    """
+    内部辅助函数：处理 Slurm 提交、轮询和结果收集
+    """
+    working_dir = os.path.dirname(script_path)
+
+    # 1. 提交作业
+    submit_msg = submit_slurm_job_core(script_path, parameter_grid=parameter_grid)
+
+    if "Success" not in submit_msg:
         return {
             "success": False,
-            "output_summary": "",
-            "metrics": {},
-            "error_message": f"Execution timed out after {timeout} seconds",
-            "output_files": [],
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "output_summary": "",
-            "metrics": {},
-            "error_message": f"Unexpected error: {str(e)}",
+            "error_message": submit_msg,
+            "metrics": {},  # 注意这里为了兼容，如果是Batch失败也返回空Dict，由上层处理
             "output_files": [],
         }
 
+    # 提取 Job ID
+    job_id = submit_msg.split("ID: ")[-1].strip().rstrip(".")
+    print(f"[Executor] Job {job_id} submitted. Waiting for completion...")
 
-# 5. 辅助函数：将 metrics 转为简短摘要
-def _summarize_metrics(metrics: Dict[str, Any]) -> str:
-    parts = []
-    for k, v in metrics.items():
-        if isinstance(v, (int, float)):
-            parts.append(f"{k}={v:.6g}")
-    return "; ".join(parts) if parts else "No numerical results found"
+    # 2. 轮询等待
+    start_time = time.time()
+    while True:
+        status = check_job_status_core(job_id)
+        if status == "COMPLETED":
+            break
+        if time.time() - start_time > timeout:
+            return {"success": False, "error_message": "Slurm execution timed out."}
+        time.sleep(10)
+
+    # 3. 收集结果
+    # 无论是单次还是批量，只要是 Batch 模式提交的，文件名都带 ID (results_0.json)
+    # 我们的 Programmer Prompt 保证了这一点
+    json_files = glob.glob(os.path.join(working_dir, "results_*.json"))
+
+    # 按索引排序 (results_0, results_1 ...)
+    try:
+        json_files.sort(key=lambda x: int(x.split("_")[-1].split(".")[0]))
+    except Exception:
+        pass
+
+    if not json_files:
+        err_files = glob.glob(os.path.join(working_dir, "*.err"))
+        err_msg = "No result files found."
+        if err_files:
+            # 读取最新的 error log
+            latest_err = max(err_files, key=os.path.getmtime)
+            with open(latest_err, "r") as f:
+                err_msg += (
+                    f"\nLast Error Log ({os.path.basename(latest_err)}):\n{f.read()}"
+                )
+
+        return {
+            "success": False,
+            "error_message": err_msg,
+            "metrics": {},
+            "output_files": glob.glob(os.path.join(working_dir, "*")),
+        }
+
+    # 4. 读取数据
+    results = []
+    for jf in json_files:
+        try:
+            with open(jf, "r") as f:
+                results.append(json.load(f))
+        except json.JSONDecodeError:
+            print(f"[Executor] Warning: Failed to decode {jf}")
+
+    return {
+        "success": True,
+        "output_summary": f"Collected {len(results)} results.",
+        "metrics": results,
+        "error_message": None,
+        "output_files": json_files,
+    }

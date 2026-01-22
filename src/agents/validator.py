@@ -25,7 +25,7 @@ class ValidationReport(BaseModel):
 
 # 2. 初始化 LLM（temperature=0 确保确定性）
 llm = ChatDeepSeek(
-    model="deepseek-chat",
+    model="deepseek-reasoner",
     temperature=0,
     max_retries=2,
 )

@@ -1,5 +1,6 @@
 # src/agents/programmer.py
 
+import logging
 from typing import Any, Dict, Optional
 
 from langchain_core.output_parsers import JsonOutputParser
@@ -9,6 +10,8 @@ from pydantic import BaseModel, Field
 
 # === 关键改动：引入知识加载器 ===
 from src.knowledge.loader import get_tenpy_context
+
+logger = logging.getLogger(__name__)
 
 
 # 1. 定义输出结构
@@ -23,7 +26,7 @@ class GeneratedCode(BaseModel):
 
 # 2. 初始化 LLM
 llm = ChatDeepSeek(
-    model="deepseek-chat",
+    model="deepseek-reasoner",
     temperature=0,  # 代码生成必须严谨
     max_retries=2,
 )
@@ -41,6 +44,15 @@ programmer_prompt = ChatPromptTemplate.from_messages(
 2. **数据持久化**：模拟结束后，**必须**将关键物理量（如能量、序参量）保存为 `results.json` 文件。
 3. **无图模式**：不要调用 `plt.show()` 或生成图片。只计算并保存数据。
 4. **自包含**：代码必须包含 `if __name__ == "__main__":` 块，且包含所有必要的 import。
+5. **批处理适配 (Batch Ready)**:
+   - 代码必须使用 `argparse` 解析命令行参数。
+   - 必须接受 `--param_file` (JSON文件路径) 和 `--job_id` (整数索引)。
+   - 程序启动时，应读取 `param_file` 中的第 `job_id` 个参数字典来初始化模型。
+   - 输出文件名必须包含 job_id，例如 `results_{job_id}.json`
+6. **自动化修复 (Auto-Fix)**: 如果 `context` 中包含错误信息 (Traceback) 或物理验证失败报告，你必须：
+   - 分析错误原因（是语法错误、API误用还是参数设置不合理）。
+   - **完全重写**代码以修复该问题。
+   - 在 `explanation` 中简述修复策略。
 
 ### TeNPy 最佳实践：
 - 模型初始化：使用 `tenpy.models` 下的标准模型或 `CouplingMPOModel`。
@@ -53,7 +65,8 @@ programmer_prompt = ChatPromptTemplate.from_messages(
             """### 任务描述
 {task_description}
 
-### 上下文与参数建议 (来自 Guide/Strategist)
+### 🛑 调试与上下文 (Debugging Context) / 上下文与参数建议 (来自 Guide/Strategist)
+请重点关注以下信息。如果包含错误日志，请修复代码：
 {context}
 
 ### 参考文档 (In-Context Knowledge)
@@ -71,25 +84,40 @@ chain = programmer_prompt | llm | parser
 
 # 4. 核心函数
 def generate_tenpy_code(
-    task_description: str, context: Optional[str] = None
+    task_description: str, context: Optional[str] = None, job_id: str = "unknown"
 ) -> Dict[str, Any]:
     """
     生成基于 TeNPy 的模拟代码，自动注入相关知识库。
     """
-    # 1. 动态检索知识 (RAG / In-Context Learning)
-    # 根据任务描述，从 knowledge 文件夹中提取最相关的 API 和 Examples
-    knowledge_base = get_tenpy_context(task_description)
+
+    # === 🚨 真正的修复在这里 (The Real Fix) ===
+    # 以前：query = task_description
+    # 现在：query = task_description + context (报错信息)
+    # 这样 loader.py 就能看到 "Traceback"，从而触发 "Smart Mode"
+
+    retrieval_query = task_description
+    if context:
+        retrieval_query += f"\n\nERROR CONTEXT:\n{context}"
+
+    # 调用智能检索
+    # loader.py 会检测到 ERROR CONTEXT 里的 Traceback，自动提取 'run' 并查源码
+    knowledge_base = get_tenpy_context(retrieval_query)
 
     logger_msg = f"Injecting {len(knowledge_base)} chars of TeNPy documentation."
     print(f"[Programmer] {logger_msg}")
+
+    # 打印出来给你看，证明它真的查到了源码
+    if "def run" in knowledge_base:
+        print("[Programmer] ✅ Verified: 'run' function source code retrieved!")
 
     try:
         result = chain.invoke(
             {
                 "task_description": task_description,
                 "context": context or "无额外参数建议",
-                "knowledge_base": knowledge_base,  # <--- 注入点
+                "knowledge_base": knowledge_base,
                 "format_instructions": parser.get_format_instructions(),
+                "job_id": job_id,
             }
         )
         return result
