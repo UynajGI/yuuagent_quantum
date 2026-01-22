@@ -8,8 +8,10 @@ from langchain_core.tools import tool
 
 from src.config.slurm_template import (
     DEFAULT_SLURM_CONFIG,
+    PYTHON_EXE,
     SLURM_BATCH_TEMPLATE,
     SLURM_SCRIPT_TEMPLATE,
+    VENV_PATH,
 )
 
 # === 1. 核心逻辑函数 (纯 Python，供 Executor 内部调用) ===
@@ -43,6 +45,8 @@ def submit_slurm_job_core(
             working_dir=script_dir,
             script_name=script_name,
             array_limit=len(parameter_grid) - 1,
+            PYTHON_EXE=PYTHON_EXE,
+            VENV_PATH=VENV_PATH,
         )
     else:
         log_path = os.path.join(script_dir, "slurm_output.log")
@@ -54,6 +58,8 @@ def submit_slurm_job_core(
             partition=DEFAULT_SLURM_CONFIG["partition"],
             working_dir=script_dir,
             script_name=script_name,
+            VENV_PATH=VENV_PATH,
+            PYTHON_EXE=PYTHON_EXE,
         )
 
     with open(sbatch_path, "w", encoding="utf-8") as f:

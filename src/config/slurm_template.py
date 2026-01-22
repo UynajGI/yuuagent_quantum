@@ -1,5 +1,6 @@
 # src/config/slurm_template.py
-
+VENV_PATH = "/share/home/jiangyuan/yuuagent_quantum/.venv/bin/activate"
+PYTHON_EXE = "/share/home/jiangyuan/yuuagent_quantum/.venv/bin/python"
 # 单任务模板 (保持不变)
 SLURM_SCRIPT_TEMPLATE = """#!/bin/bash
 #SBATCH --job-name={job_name}
@@ -15,7 +16,7 @@ source ~/.bashrc
 cd {working_dir}
 
 echo "Starting job at $(date)"
-python {script_name}
+{PYTHON_EXE} {script_name}
 echo "Job finished at $(date)"
 """
 
@@ -35,12 +36,14 @@ SLURM_BATCH_TEMPLATE = """#!/bin/bash
 #SBATCH --partition={partition}
 #SBATCH --array=0-{array_limit}%{max_array_size}
 
-source ~/.bashrc
+source {VENV_PATH}
+export PYTHONPATH=$PYTHONPATH:$(pwd)  # 确保能找到当前目录模块
+
 cd {working_dir}
 
 echo "Starting Batch Task $SLURM_ARRAY_TASK_ID at $(date)"
 # 核心：将 Job ID 传给脚本，脚本读取 params.json 中的第 ID 项参数
-python {script_name} --param_file params.json --job_id $SLURM_ARRAY_TASK_ID
+{PYTHON_EXE} {script_name} --param_file params.json --job_id $SLURM_ARRAY_TASK_ID
 echo "Batch Task $SLURM_ARRAY_TASK_ID finished at $(date)"
 """
 
@@ -48,5 +51,5 @@ DEFAULT_SLURM_CONFIG = {
     "partition": "cpu_amd",
     "cpus": 4,
     "time_limit": "04:00:00",
-    "max_array_size": 100,
+    "max_array_size": 10,
 }
