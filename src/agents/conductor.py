@@ -1,6 +1,6 @@
 # src/agents/conductor.py
-
 import logging
+from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional
 
 from langchain_core.output_parsers import JsonOutputParser
@@ -18,6 +18,7 @@ from src.agents.programmer import generate_tenpy_code
 from src.agents.strategist import decompose_task
 from src.agents.validator import validate_simulation_results
 from src.agents.visualizer import create_visualization
+from src.knowledge.loader import lookup_specific_api
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("Conductor")
@@ -111,6 +112,12 @@ def run_conductor(user_task: str, max_steps: int = 20):
     }
 
     logger.info(f"🚀 Starting Mission: {user_task}")
+
+    project_root = Path(__file__).resolve().parent.parent.parent
+    shared_workspace = project_root / "workspace"
+    shared_workspace.mkdir(parents=True, exist_ok=True)
+
+    logger.info(f"📂 Workspace Initialized: {shared_workspace}")
 
     for step in range(max_steps):
         print(f"\n======== Step {step + 1} ========")
@@ -211,13 +218,37 @@ def run_conductor(user_task: str, max_steps: int = 20):
             elif action == "call_programmer":
                 # 构建增强上下文：将 Guide 的假设注入给程序员
                 enhanced_context = context_input
+
+                if state["last_error"]:
+                    logger.info(
+                        "🔍 Detecting error... Auto-inspecting critical APIs (run)..."
+                    )
+                    api_docs = lookup_specific_api("run")
+                    if api_docs:
+                        enhanced_context += f"\n\n!!! CRITICAL API DEFINITIONS (AUTO-RETRIEVED) !!!\n{api_docs}\n"
+
                 if state.get("last_hypothesis"):
                     enhanced_context += f"\n\n[Scientific Hypothesis to Verify]:\n{state['last_hypothesis']}"
 
+                current_job_id = (
+                    f"repair_{state['repair_attempts']}"
+                    if state["last_error"]
+                    else "init_job"
+                )
+
+                if state.get("last_hypothesis"):
+                    enhanced_context += f"\n\n[Scientific Hypothesis to Verify]:\n{state['last_hypothesis']}"
+                current_job_id = (
+                    f"repair_{state['repair_attempts']}"
+                    if state["last_error"]
+                    else "init_job"
+                )
                 # 如果有具体的参数建议，也一并传入
                 # 这样程序员在写 argparse 的 default 值或者参数扫描范围时会有依据
                 code_result = generate_tenpy_code(
-                    task_description=user_task, context=enhanced_context
+                    task_description=user_task,
+                    context=enhanced_context,
+                    job_id=current_job_id,
                 )
                 state["code"] = code_result["code"]
 
@@ -231,10 +262,13 @@ def run_conductor(user_task: str, max_steps: int = 20):
                 logger.info(
                     f"⚡ calling executor with {len(final_params) if final_params else 0} params"
                 )
+                job_dir_name = f"step_{step + 1:02d}_execution"
+                current_working_dir = shared_workspace / job_dir_name
                 exec_result = execute_simulation_code(
                     state["code"],
                     user_task,
                     parameter_grid=final_params,  # <--- 关键连接点
+                    working_dir=str(current_working_dir),
                 )
 
                 if exec_result["success"]:
@@ -290,7 +324,7 @@ def run_conductor(user_task: str, max_steps: int = 20):
                 if not state["is_validated"]:
                     logger.warning("⚠️ Warning: Plotting unvalidated data.")
 
-                viz_result = create_visualization(user_task, state["aggregated_data"])
+                viz_result = create_visualization(user_task, state["raw_metrics"])
                 logger.info(f"🎨 Plot saved: {viz_result.get('save_path')}")
 
             # 记录动作

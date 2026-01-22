@@ -5,6 +5,7 @@ import json
 import os
 import tempfile
 import time
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from langchain_core.output_parsers import JsonOutputParser
@@ -60,35 +61,50 @@ parse_chain = parse_output_prompt | llm | parser
 def execute_simulation_code(
     code: str,
     task_description: str,
-    parameter_grid: Optional[List[Dict[str, Any]]] = None,  # <--- 关键新增接口
-    timeout: int = 3600,  # 批处理超时时间通常要长一些
+    parameter_grid: Optional[List[Dict[str, Any]]] = None,
+    timeout: int = 3600,
     working_dir: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    执行模拟。自动判断是本地执行还是 Slurm 批量执行。
+    执行模拟。统一使用 Slurm Batch 接口，确保参数传递一致性。
     """
     if working_dir is None:
-        working_dir = tempfile.mkdtemp(prefix="yuuagent_exec_")
+        project_root = Path(__file__).resolve().parent.parent.parent
+        workspace_root = project_root / "workspace"
+        os.makedirs(workspace_root, exist_ok=True)
+        working_dir = tempfile.mkdtemp(prefix="exec_", dir=workspace_root)
 
     os.makedirs(working_dir, exist_ok=True)
     script_path = os.path.join(working_dir, "simulation.py")
 
-    # 1. 写入代码文件
+    # 2. 写入代码
     with open(script_path, "w", encoding="utf-8") as f:
         f.write(code)
 
-    # === 分支：是否存在参数网格？ ===
-    if parameter_grid and len(parameter_grid) > 0:
-        print(
-            f"[Executor] Detected {len(parameter_grid)} parameters. Switching to Slurm Batch Mode."
-        )
-        return _execute_batch_slurm(script_path, parameter_grid, timeout)
-    else:
-        # === 默认：本地单次执行 (保持原有逻辑，或者也可以改为提交单次Slurm) ===
-        # 这里为了演示简单，保留之前的 subprocess.run 逻辑，或者调用 submit_slurm_job(..., parameter_grid=None)
-        # 建议：如果是在登录节点，最好也用 Slurm 提交单次作业，避免占用登录节点资源
-        print("[Executor] No parameters provided. Submitting single Slurm job.")
-        return _execute_batch_slurm(script_path, None, timeout)  # 复用轮询逻辑
+    # === 3. 统一批处理逻辑 (Unified Batch Strategy) ===
+    # 标记原本是否为单次运行，用于后续解包结果
+    is_single_run = False
+
+    if not parameter_grid or len(parameter_grid) == 0:
+        print("[Executor] Single run detected. Converting to Batch-of-One.")
+        is_single_run = True
+        parameter_grid = [{"_job_type": "single_run"}]  # 伪造一个参数列表
+
+    print(f"[Executor] Submitting Job Array with {len(parameter_grid)} tasks.")
+
+    # 执行任务
+    raw_result = _execute_batch_slurm(script_path, parameter_grid, timeout)
+
+    # === 4. 结果解包修正 (Fix Return Type Mismatch) ===
+    if is_single_run and raw_result["success"]:
+        # 如果原本是单任务，metrics 当前是 List[Dict]，需要变成 Dict
+        metrics_list = raw_result["metrics"]
+        if isinstance(metrics_list, list) and len(metrics_list) > 0:
+            raw_result["metrics"] = metrics_list[0]
+        else:
+            raw_result["metrics"] = {}  # 防御性编程
+
+    return raw_result
 
 
 def _execute_batch_slurm(script_path, parameter_grid, timeout):
@@ -97,62 +113,53 @@ def _execute_batch_slurm(script_path, parameter_grid, timeout):
     """
     working_dir = os.path.dirname(script_path)
 
-    # 1. 提交作业 (复用工具)
-    # 注意：submit_slurm_job 是个 Tool，直接调用其 python 函数逻辑即可
-    # 如果它是被 @tool 装饰的，可能需要 .invoke 或者直接提取逻辑。
-    # 这里假设我们直接调用上面定义的 python 函数逻辑。
+    # 1. 提交作业
     submit_msg = submit_slurm_job_core(script_path, parameter_grid=parameter_grid)
 
     if "Success" not in submit_msg:
         return {
             "success": False,
             "error_message": submit_msg,
-            "metrics": {},
+            "metrics": {},  # 注意这里为了兼容，如果是Batch失败也返回空Dict，由上层处理
             "output_files": [],
         }
 
-    # 提取 Job ID (简单的字符串处理)
+    # 提取 Job ID
     job_id = submit_msg.split("ID: ")[-1].strip().rstrip(".")
     print(f"[Executor] Job {job_id} submitted. Waiting for completion...")
 
     # 2. 轮询等待
     start_time = time.time()
     while True:
-        # === 关键修改：调用 Core 函数 ===
         status = check_job_status_core(job_id)
         if status == "COMPLETED":
             break
-
         if time.time() - start_time > timeout:
             return {"success": False, "error_message": "Slurm execution timed out."}
-
         time.sleep(10)
 
     # 3. 收集结果
-    # 假设 Programmer 生成的代码会将结果保存为 results_{job_id}.json
-    # 如果是单次任务，可能是 results.json
-    results = []
+    # 无论是单次还是批量，只要是 Batch 模式提交的，文件名都带 ID (results_0.json)
+    # 我们的 Programmer Prompt 保证了这一点
+    json_files = glob.glob(os.path.join(working_dir, "results_*.json"))
 
-    if parameter_grid:
-        # 批量模式：查找所有 results_*.json
-        json_files = glob.glob(os.path.join(working_dir, "results_*.json"))
-        # 按索引排序确保顺序
-        # 假设文件名是 results_0.json, results_1.json
-        try:
-            json_files.sort(key=lambda x: int(x.split("_")[-1].split(".")[0]))
-        except ValueError:
-            pass  # 如果文件名格式不对就不强求排序
-    else:
-        # 单次模式
-        json_files = glob.glob(os.path.join(working_dir, "results.json"))
+    # 按索引排序 (results_0, results_1 ...)
+    try:
+        json_files.sort(key=lambda x: int(x.split("_")[-1].split(".")[0]))
+    except Exception:
+        pass
 
     if not json_files:
-        # 读取错误日志
         err_files = glob.glob(os.path.join(working_dir, "*.err"))
         err_msg = "No result files found."
         if err_files:
-            with open(err_files[0], "r") as f:
-                err_msg += f"\nLast Error Log:\n{f.read()}"
+            # 读取最新的 error log
+            latest_err = max(err_files, key=os.path.getmtime)
+            with open(latest_err, "r") as f:
+                err_msg += (
+                    f"\nLast Error Log ({os.path.basename(latest_err)}):\n{f.read()}"
+                )
+
         return {
             "success": False,
             "error_message": err_msg,
@@ -160,19 +167,19 @@ def _execute_batch_slurm(script_path, parameter_grid, timeout):
             "output_files": glob.glob(os.path.join(working_dir, "*")),
         }
 
-    # 读取所有数据
+    # 4. 读取数据
+    results = []
     for jf in json_files:
-        with open(jf, "r") as f:
-            results.append(json.load(f))
-
-    # 4. 返回
-    # 如果是批量，metrics 返回列表；如果是单次，返回字典（保持接口兼容性）
-    final_metrics = results if parameter_grid else results[0]
+        try:
+            with open(jf, "r") as f:
+                results.append(json.load(f))
+        except json.JSONDecodeError:
+            print(f"[Executor] Warning: Failed to decode {jf}")
 
     return {
         "success": True,
-        "output_summary": f"Collected {len(results)} results from Slurm.",
-        "metrics": final_metrics,  # Aggregator 需要适配处理 List
+        "output_summary": f"Collected {len(results)} results.",
+        "metrics": results,
         "error_message": None,
         "output_files": json_files,
     }
