@@ -9,92 +9,110 @@ from langchain_deepseek import ChatDeepSeek
 from pydantic import BaseModel, Field
 
 
-# 1. 定义 Validator 的输出结构
+# 1. Output Structure
 class ValidationReport(BaseModel):
-    is_valid: bool = Field(description="结果是否物理合理且数值可靠")
+    is_valid: bool = Field(
+        description="Is the result physically reasonable and numerically reliable?"
+    )
     issues: List[str] = Field(
-        description="发现的问题列表（如 'Energy not converged', 'Mz > 0.5'）"
+        description="List of issues found (e.g., 'Energy not converged', 'Mz > 0.5')"
     )
     confidence: float = Field(
-        ge=0.0, le=1.0, description="验证置信度（1.0 = 完全可信）"
+        ge=0.0, le=1.0, description="Validation confidence (1.0 = fully confident)"
     )
     recommendations: List[str] = Field(
-        description="改进建议（如 'Increase bond dimension', 'Check Hamiltonian definition'）"
+        description="Suggestions for improvement (e.g., 'Increase bond dimension')"
     )
 
 
-# 2. 初始化 LLM（temperature=0 确保确定性）
+# 2. Initialize LLM
+# [Improvement]: Use deepseek-chat for standard JSON output stability,
+# or ensure deepseek-reasoner output is stripped of <think> tags if used.
+# Here we stick to 'deepseek-chat' with low temperature for reliable parsing.
 llm = ChatDeepSeek(
-    model="deepseek-reasoner",
+    model="deepseek-chat",
     temperature=0,
     max_retries=2,
 )
 
-
-# 3. 构建 Prompt（注入量子多体物理常识）
+# 3. Prompt Construction
 validator_prompt = ChatPromptTemplate.from_messages(
     [
         (
             "system",
-            """你是一个量子多体模拟验证专家（Validator Agent）。你的任务是：
-- 检查模拟结果是否满足基本物理约束（如能量下界、序参量范围）
-- 评估数值收敛性（如 bond dimension、时间步长是否足够）
-- 识别常见错误（如哈密顿量定义错误、边界条件混淆）
-- 若结果可疑，明确指出问题并给出改进建议
+            """You are a Quantum Many-Body Simulation Validator Agent.
+Your task is to STRICTLY verify simulation results against physical laws and numerical consistency.
 
-请基于以下领域知识判断：
-- 横场伊辛模型：|Mz| ∈ [0, 0.5]，基态能量应随 h 单调变化
-- DMRG 收敛：bond dim 增加时能量变化应 < 1e-6
-- 自旋系统：总 Sz 应在 [-L/2, L/2] 范围内
+### Physics Knowledge Base (Rydberg & Ising Focus):
+1. **Transverse Field Ising**:
+   - Order parameter <sigma_z> should decrease as transverse field 'g' increases.
+   - Ground state energy must be monotonic with 'g'.
+   - At critical point (g~1), correlation length should peak.
+2. **Rydberg Atom Chain**:
+   - Z2 Phase: Atoms alternate (up-down-up-down).
+   - Paramagnetic Phase: Uniform state.
+3. **DMRG/MPS Checks**:
+   - **Energy Variance**: Should be < 1e-5 for reliable results.
+   - **Entanglement Entropy**: Should not be negative.
+   - **Truncation Error**: High truncation error (> 1e-4) implies insufficient bond dimension (chi).
 
-只基于提供的数据判断，不要假设未给出的信息。
+### Protocol:
+- If `energy` increases during a cooling/ground-state search, report INVALID.
+- If `magnetization` behaves opposite to physical intuition, report INVALID.
+- If data is empty or NaNs are present, report INVALID.
+
+Input Context:
+Task: {task_description}
 """,
         ),
         (
             "human",
-            """原始研究任务：{task_description}
-
-模拟结果摘要：
+            """Simulation Results Summary:
 {simulation_results}
 
-请按以下 JSON Schema 输出验证报告：
+Analyze and report in JSON format:
 {format_instructions}""",
         ),
     ]
 )
 
-
-# 4. 绑定解析器
 parser = JsonOutputParser(pydantic_object=ValidationReport)
 chain = validator_prompt | llm | parser
 
 
-# 5. 核心函数
 def validate_simulation_results(
     task_description: str,
     simulation_results: Union[str, Dict[str, Any], List[Dict[str, Any]]],
 ) -> Dict[str, Any]:
     """
-    验证模拟结果的物理合理性与数值可靠性
-
-    Args:
-        task_description: 用户原始任务
-        simulation_results: Executor 返回的结果（含 metrics, output_files 等）
-
-    Returns:
-        结构化验证报告（符合 ValidationReport schema）
+    Validate simulation results for physical plausibility.
     """
-    # 标准化输入为字符串
     if isinstance(simulation_results, (dict, list)):
         input_str = json.dumps(simulation_results, indent=2, ensure_ascii=False)
     else:
         input_str = str(simulation_results)
 
+    # [Improvement]: Check for empty data before calling LLM
+    if not input_str or input_str == "[]" or input_str == "{}":
+        return {
+            "is_valid": False,
+            "issues": ["No data generated to validate."],
+            "confidence": 1.0,
+            "recommendations": ["Check Executor or Programmer for runtime errors."],
+        }
+
     try:
+        # [Improvement]: Truncate extremely long data to prevent context overflow
+        # but keep the head and tail which often contain the most relevant trend info
+        if len(input_str) > 10000:
+            input_segment = input_str[:5000] + "\n...[snipped]...\n" + input_str[-5000:]
+        else:
+            input_segment = input_str
+
         result = chain.invoke(
             {
                 "task_description": task_description,
-                "simulation_results": input_str[:8000],  # 防止超长
+                "simulation_results": input_segment,
                 "format_instructions": parser.get_format_instructions(),
             }
         )
@@ -102,7 +120,7 @@ def validate_simulation_results(
     except Exception as e:
         return {
             "is_valid": False,
-            "issues": [f"Validation failed due to: {str(e)}"],
+            "issues": [f"Validation crashed: {str(e)}"],
             "confidence": 0.0,
-            "recommendations": ["Retry validation with simplified input."],
+            "recommendations": ["Manual inspection required."],
         }
