@@ -109,6 +109,7 @@ def run_conductor(user_task: str, max_steps: int = 20):
         "last_hypothesis": None,  # Guide 最近的科学假设
         "research_log": [],
         "repair_attempts": 0,
+        "pending_suggestions": None,
     }
 
     logger.info(f"🚀 Starting Mission: {user_task}")
@@ -132,6 +133,9 @@ def run_conductor(user_task: str, max_steps: int = 20):
         code_status = "Ready" if state["code"] else "Missing"
         data_status = f"Raw: {len(state['raw_metrics'])} runs"
 
+        additional_context = ""
+        if state["pending_suggestions"]:
+            additional_context = f"\n[URGENT] Guide suggested new parameters: {state['pending_suggestions']}. Priority Action: Update code or Execute."
         # 1. Conductor 决策
         try:
             decision = chain.invoke(
@@ -144,7 +148,9 @@ def run_conductor(user_task: str, max_steps: int = 20):
                     "data_status": data_status,
                     "has_data": bool(state["aggregated_data"]),
                     "is_validated": state["is_validated"],
-                    "last_error": state["last_error"] or "None",
+                    "last_error": state["last_error"]
+                    or "None"
+                    + additional_context,  # Inject here or add new prompt field
                     "repair_attempts": state["repair_attempts"],
                     "format_instructions": parser.get_format_instructions(),
                 }
@@ -203,6 +209,18 @@ def run_conductor(user_task: str, max_steps: int = 20):
                     else None,
                     research_log=state["research_log"],
                 )
+                if guide_decision.get("suggested_parameters"):
+                    logger.info(
+                        f"💡 Guide suggests params: {guide_decision['suggested_parameters']}"
+                    )
+                    state["pending_suggestions"] = guide_decision[
+                        "suggested_parameters"
+                    ]
+                    state["research_log"].append(
+                        f"Adaptive Strategy: Refining scan with {state['pending_suggestions']}"
+                    )
+                else:
+                    state["pending_suggestions"] = None
 
                 # === 关键保存：将假设存入全局状态 ===
                 state["last_hypothesis"] = guide_decision.get("scientific_hypothesis")
@@ -272,7 +290,12 @@ def run_conductor(user_task: str, max_steps: int = 20):
                     raise ValueError("No code to execute!")
 
                 # Executor 运行
-                final_params = exec_params if exec_params else None
+                final_params = (
+                    state["pending_suggestions"]
+                    if state["pending_suggestions"]
+                    else exec_params
+                )
+                state["pending_suggestions"] = None
                 logger.info(
                     f"⚡ calling executor with {len(final_params) if final_params else 0} params"
                 )
@@ -338,11 +361,31 @@ def run_conductor(user_task: str, max_steps: int = 20):
                 if not state["is_validated"]:
                     logger.warning("⚠️ Warning: Plotting unvalidated data.")
 
-                viz_result = create_visualization(user_task, state["raw_metrics"])
-                logger.info(f"🎨 Plot saved: {viz_result.get('save_path')}")
+                current_viz_dir = shared_workspace / "plots"
 
-            # 记录动作
-            state["history_actions"].append(action)
+                # 优先使用聚合后的数据
+                data_to_plot = (
+                    state["aggregated_data"]
+                    if state["aggregated_data"]
+                    else state["raw_metrics"]
+                )
+
+                viz_result = create_visualization(
+                    user_task, data_to_plot, output_dir=str(current_viz_dir)
+                )
+
+                if viz_result["success"] and viz_result["save_path"]:
+                    logger.info(
+                        f"🎨 Plot saved successfully: {viz_result['save_path']}"
+                    )
+                    state["research_log"].append(
+                        f"Plot Generated: {viz_result['save_path']}"
+                    )
+                else:
+                    # === 必须要有这一段才能看到报错 ===
+                    error_msg = viz_result.get("error", "Unknown error")
+                    logger.error(f"❌ Plotting Failed: {error_msg}")  # <--- 看这里
+                    state["last_error"] = f"Visualizer Error: {error_msg}"
 
         except Exception as e:
             logger.error(f"❌ Action {action} crashed: {e}")
