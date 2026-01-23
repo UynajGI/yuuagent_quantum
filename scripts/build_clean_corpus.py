@@ -1,3 +1,4 @@
+# scripts/build_clean_corpus.py
 import ast
 import json
 import os
