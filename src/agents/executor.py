@@ -3,6 +3,8 @@
 import glob
 import json
 import os
+import shutil
+import subprocess
 import tempfile
 import time
 from pathlib import Path
@@ -150,19 +152,25 @@ def _execute_batch_slurm(script_path, parameter_grid, timeout):
         pass
 
     if not json_files:
+        diagnostic_report = _diagnose_slurm_failure(job_id)
+
         err_files = glob.glob(os.path.join(working_dir, "*.err"))
-        err_msg = "No result files found."
+        err_content = ""
         if err_files:
-            # 读取最新的 error log
             latest_err = max(err_files, key=os.path.getmtime)
             with open(latest_err, "r") as f:
-                err_msg += (
-                    f"\nLast Error Log ({os.path.basename(latest_err)}):\n{f.read()}"
-                )
+                err_content = f.read()[-2000:]  # Last 2000 chars
+
+        error_summary = f"""
+        Simulation Failed. No results generated.
+        [System Diagnosis]: {diagnostic_report}
+        [Error Log Tail]:
+        {err_content}
+        """
 
         return {
             "success": False,
-            "error_message": err_msg,
+            "error_message": error_summary,  # Pass this enriched error to Programmer
             "metrics": {},
             "output_files": glob.glob(os.path.join(working_dir, "*")),
         }
@@ -183,3 +191,51 @@ def _execute_batch_slurm(script_path, parameter_grid, timeout):
         "error_message": None,
         "output_files": json_files,
     }
+
+
+def _diagnose_slurm_failure(job_id: str) -> str:
+    """
+    Uses 'sacct' to determine why a job failed (OOM, Timeout, Node Fail).
+    """
+    # Check if sacct is available (skip if running locally without Slurm)
+    if not shutil.which("sacct"):
+        return "Slurm 'sacct' command not found. Unable to diagnose."
+
+    try:
+        # Request specific fields: State, ExitCode, MaxRSS (memory used)
+        cmd = [
+            "sacct",
+            "-j",
+            job_id,
+            "--format=State,ExitCode,MaxRSS,Elapsed",
+            "-n",
+            "-p",
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+
+        if result.returncode != 0:
+            return f"Failed to run sacct: {result.stderr}"
+
+        # Parse output (e.g., FAILED|127:0||00:00:01|)
+        # Typical output lines might vary, simplistically:
+        output = result.stdout.strip().split("\n")[0]
+        parts = output.split("|")
+
+        state = parts[0]
+        exit_code = parts[1]
+
+        diagnosis = f"Slurm State: {state}, Exit Code: {exit_code}."
+
+        if "OUT_OF_MEMORY" in state or "OOM" in state:
+            return f"CRITICAL: Job killed due to OUT OF MEMORY (OOM). {diagnosis} -> Suggestion: Decrease bond dimension (chi) or request more memory."
+
+        if "TIMEOUT" in state:
+            return f"CRITICAL: Job killed due to TIMEOUT. {diagnosis} -> Suggestion: Increase time_limit or reduce system size."
+
+        if exit_code.startswith("0:"):
+            return "Job finished successfully according to Slurm (Python level error might still exist)."
+
+        return f"Slurm Job Failure: {diagnosis}"
+
+    except Exception as e:
+        return f"Diagnosis failed: {e}"
