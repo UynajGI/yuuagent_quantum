@@ -15,20 +15,20 @@ from pydantic import BaseModel, Field
 logger = logging.getLogger("Visualizer")
 
 
-# 1. Decision Structure
+# 1. 决策结构
 class VisualizationPlan(BaseModel):
     plot_type: Literal["line", "scatter", "heatmap", "bar", "none"] = Field(
-        description="Type of plot to generate. Use 'none' if data is unsuitable for plotting."
+        description="图表类型，如果不适合绘图则填 none"
     )
-    x_var: Optional[str] = Field(description="Column name for X axis")
-    y_var: Optional[str] = Field(description="Column name for Y axis")
-    title: str = Field(description="Scientific title for the plot")
-    xlabel: str = Field(description="Label for X axis (with units)")
-    ylabel: str = Field(description="Label for Y axis (with units)")
-    save_filename: str = Field(description="Filename only (e.g., 'phase_diagram.png')")
+    x_var: Optional[str] = Field(description="X轴变量名")
+    y_var: Optional[str] = Field(description="Y轴变量名")
+    title: str = Field(description="图表标题")
+    xlabel: str = Field(description="X轴标签")
+    ylabel: str = Field(description="Y轴标签")
+    save_filename: str = Field(description="保存文件名，如 result.png")
 
 
-# 2. Initialize LLM
+# 2. 初始化 LLM
 llm = ChatDeepSeek(model="deepseek-chat", temperature=0)
 
 # 3. Prompt
@@ -36,24 +36,22 @@ viz_prompt = ChatPromptTemplate.from_messages(
     [
         (
             "system",
-            """You are a Scientific Visualization Expert.
-Analyze the provided data columns and task description to create a publication-quality plot plan.
-
-Rules:
-1. Identify the 'Control Parameter' (e.g., h, g, delta) for the X-axis.
-2. Identify the 'Order Parameter' or 'Observable' (e.g., E, M, S_vN) for the Y-axis.
-3. If multiple Y-values exist for one X (e.g., from different seeds), prefer a Scatter plot or Line plot with markers.
-4. Ensure physical units are mentioned in labels if known (e.g., 'Time [1/J]').
+            """你是一个科学可视化专家。根据提供的数据样本，制定绘图计划。
+规则：
+1. 优先寻找控制参数（如 g, h, J, time）作为 X 轴。
+2. 优先寻找序参量或能量（如 energy, mz, entropy）作为 Y 轴。
+3. 如果数据是扫描过程（Scan），必须选择 'line' 或 'scatter'。
+4. 确保物理单位正确。
 """,
         ),
         (
             "human",
-            """Task: {task_description}
-Available Columns: {available_columns}
-Data Sample (First 5 rows):
+            """任务: {task_description}
+可用列名: {available_columns}
+数据样本 (前5行):
 {data_sample}
 
-Generate Plotting Plan:
+请输出绘图计划:
 {format_instructions}""",
         ),
     ]
@@ -63,52 +61,75 @@ parser = JsonOutputParser(pydantic_object=VisualizationPlan)
 chain = viz_prompt | llm | parser
 
 
+def _flatten_data(data: Union[List, Dict]) -> pd.DataFrame:
+    """
+    [关键修复] 智能扁平化数据，处理嵌套结构
+    """
+    if isinstance(data, str):
+        try:
+            data = json.loads(data)
+        except:
+            return pd.DataFrame()
+
+    # Case 1: 已经是扁平的列表
+    if isinstance(data, list):
+        # 检查是否是 [{'metrics': {...}, 'job_id': 1}, ...] 这种结构
+        if len(data) > 0 and isinstance(data[0], dict) and "metrics" in data[0]:
+            # 提取 metrics 并合并外层字段 (如 job_id)
+            flattened = []
+            for item in data:
+                row = item.get("metrics", {}).copy()
+                # 把非 metrics 的其他简单字段也加进来 (如 params)
+                for k, v in item.items():
+                    if k != "metrics" and isinstance(v, (int, float, str)):
+                        row[k] = v
+                    elif k == "params" and isinstance(v, dict):
+                        row.update(v)  # 展开 params
+                flattened.append(row)
+            return pd.DataFrame(flattened)
+        else:
+            return pd.DataFrame(data)
+
+    # Case 2: 字典 (可能是 Aggregator 的输出)
+    elif isinstance(data, dict):
+        if "metrics" in data and isinstance(data["metrics"], list):
+            return _flatten_data(data["metrics"])  # 递归处理
+        else:
+            return pd.DataFrame([data])
+
+    return pd.DataFrame()
+
+
 def create_visualization(
     task_description: str,
     aggregated_data: Union[str, Dict[str, Any], List[Dict[str, Any]]],
-    output_dir: str = ".",  # Passed dynamically from Conductor
+    output_dir: str = ".",
 ) -> Dict[str, Any]:
     """
-    Generate scientific plots from aggregated data.
+    生成科学图表
     """
-    # 1. Parse Data
+    os.makedirs(output_dir, exist_ok=True)
+
+    # 1. 解析并清洗数据
     try:
-        if isinstance(aggregated_data, str):
-            data = json.loads(aggregated_data)
-        else:
-            data = aggregated_data
+        df = _flatten_data(aggregated_data)
 
-        # Normalize to List of Dicts
-        if isinstance(data, dict):
-            # Check if it's a "summary" wrapper
-            if "metrics" in data and isinstance(data["metrics"], list):
-                data = data["metrics"]
-            else:
-                data = [data]
-
-        df = pd.DataFrame(data)
-
-        # [Improvement]: Filter out non-numeric columns for plotting
+        # 过滤掉非数值列，防止绘图报错
         numeric_cols = df.select_dtypes(include=["number"]).columns.tolist()
-        if not numeric_cols:
+
+        if df.empty or not numeric_cols:
             return {
                 "success": False,
-                "error": "No numeric data to plot.",
+                "error": "数据为空或没有数值列，无法绘图。",
                 "save_path": None,
             }
 
     except Exception as e:
-        return {
-            "success": False,
-            "error": f"Data parsing failed: {e}",
-            "save_path": None,
-        }
+        return {"success": False, "error": f"数据解析失败: {e}", "save_path": None}
 
-    # 2. Plan
+    # 2. 制定计划
     try:
-        # Only send a sample to LLM to save tokens
         data_sample = df.head(5).to_markdown(index=False)
-
         plan = chain.invoke(
             {
                 "task_description": task_description,
@@ -118,52 +139,40 @@ def create_visualization(
             }
         )
     except Exception as e:
-        return {"success": False, "error": f"Planning failed: {e}", "save_path": None}
+        return {"success": False, "error": f"LLM 绘图规划失败: {e}", "save_path": None}
 
     if plan["plot_type"] == "none":
-        return {
-            "success": True,
-            "message": "LLM decided not to plot.",
-            "save_path": None,
-        }
+        return {"success": True, "message": "LLM 决定不绘图。", "save_path": None}
 
-    # 3. Plot
+    # 3. 执行绘图
     try:
-        # [Improvement]: Use high-quality science style
-        plt.style.use("seaborn-v0_8-paper")
-        plt.figure(figsize=(10, 6))
+        data_sample = df.head(5).to_markdown(index=False)
 
-        # Check if columns exist
-        if plan["x_var"] not in df.columns or plan["y_var"] not in df.columns:
-            raise ValueError(
-                f"Selected columns {plan['x_var']}/{plan['y_var']} not in data."
-            )
+        # 获取原始 LLM 响应
+        response_msg = chain.invoke(
+            {
+                "task_description": task_description,
+                "available_columns": ", ".join(numeric_cols),
+                "data_sample": data_sample,
+                "format_instructions": parser.get_format_instructions(),
+            }
+        )
 
-        # Sort by X for clean line plots
-        df_sorted = df.sort_values(by=plan["x_var"])
-        x = df_sorted[plan["x_var"]]
-        y = df_sorted[plan["y_var"]]
+        # 手动提取 JSON (DeepSeek 有时会多嘴)
+        content = response_msg.content
+        if "```json" in content:
+            content = content.split("```json")[1].split("```")[0].strip()
+        elif "```" in content:
+            content = content.split("```")[1].split("```")[0].strip()
 
-        if plan["plot_type"] == "line":
-            plt.plot(x, y, "o-", linewidth=2, markersize=6, label=plan["y_var"])
-        elif plan["plot_type"] == "scatter":
-            plt.scatter(x, y, alpha=0.8, label=plan["y_var"])
-        elif plan["plot_type"] == "bar":
-            plt.bar(x, y)
-
-        plt.title(plan["title"], fontsize=14)
-        plt.xlabel(plan["xlabel"], fontsize=12)
-        plt.ylabel(plan["ylabel"], fontsize=12)
-        plt.grid(True, linestyle="--", alpha=0.7)
-        plt.legend()
-
-        # Save
-        full_save_path = os.path.join(output_dir, plan["save_filename"])
-        plt.savefig(full_save_path, dpi=300, bbox_inches="tight")
-        plt.close()
-
-        return {"success": True, "save_path": full_save_path, "plot_info": plan}
+        # 解析 JSON
+        plan_dict = json.loads(content)
+        # 验证结构
+        plan = VisualizationPlan(**plan_dict).dict()
 
     except Exception as e:
-        logger.error(f"Plotting routine crashed: {e}")
-        return {"success": False, "error": f"Matplotlib error: {e}", "save_path": None}
+        return {
+            "success": False,
+            "error": f"LLM 绘图规划解析失败: {e}\nRaw Content: {content[:100]}...",
+            "save_path": None,
+        }
